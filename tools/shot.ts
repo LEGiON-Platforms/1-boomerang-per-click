@@ -126,12 +126,12 @@ if (stepsArg === 'clear' || stepsArg === 'all') {
   // Walls stay down for 6 s in the lobby, then rise again (seen from high over the lobby).
   await page.evaluate('(() => { const c = window.__bpcRuntime.cameraState; c.yaw = 0; c.pitch = 0.5; c.distance = 38 })()')
   await sleep(800)
-  console.log('walls down?', await page.evaluate('JSON.stringify(window.__bpcRuntime.wallHold)'))
+  console.log('walls down?', await page.evaluate('JSON.stringify(window.__bpcGame.getState().run)'))
   await shot(page, '05-lobby-walls-down')
   await sleep(4400)
   await shot(page, '05-lobby-walls-rising')
   await sleep(2500)
-  console.log('walls rebuilt?', await page.evaluate('JSON.stringify(window.__bpcRuntime.wallHold)'))
+  console.log('walls rebuilt?', await page.evaluate('JSON.stringify(window.__bpcGame.getState().run)'))
   await shot(page, '05-lobby-walls-rebuilt')
 }
 
@@ -372,6 +372,30 @@ if (stepsArg === 'refresh') {
   await shot(page, '47-after-refresh')
   console.log(after.power >= before.power && after.xp >= before.xp && after.wins >= before.wins ? 'progress kept' : 'PROGRESS LOST')
   console.log(after.players === before.players ? 'no leftover avatar' : `players before ${before.players}, after ${after.players}`)
+}
+
+if (stepsArg === 'walkback') {
+  // Break a couple of walls, walk back to the lobby: 6 s later the walls are back.
+  type G = { getState(): { run: { stage: number; wallsBroken: number } } }
+  type Rt = { localPlayer: { pos: { z: number } } }
+  const run = () => page.evaluate(() => JSON.stringify((window as unknown as { __bpcGame: G }).__bpcGame.getState().run))
+  const z = () => page.evaluate(() => (window as unknown as { __bpcRuntime: Rt }).__bpcRuntime.localPlayer.pos.z)
+  await page.keyboard.press('Escape')
+  await page.evaluate(() => (window as unknown as { __bpcTeleport?: (s: number) => void }).__bpcTeleport?.(1))
+  await sleep(1200)
+  for (let i = 0; i < 40 && JSON.parse(await run()).wallsBroken < 2; i += 1) {
+    await clicks(page, 3, 110)
+    await hold(page, 'w', 300)
+  }
+  console.log('walls broken:', await run())
+  await page.keyboard.down('Shift')
+  for (let i = 0; i < 40 && (await z()) < 14; i += 1) await hold(page, 's', 250)
+  await page.keyboard.up('Shift')
+  console.log('back in the lobby at z', (await z()).toFixed(1), await run())
+  await sleep(3000)
+  console.log('after 3 s:', await run())
+  await sleep(3800)
+  console.log('after ~7 s:', await run())
 }
 
 if (stepsArg === 'banner') {

@@ -110,44 +110,6 @@ export function playerScreenPoint(up = 1.3): { x: number; y: number } {
  */
 export const wallFx = { hitAt: -10, breakAt: -10, breakX: 0 }
 
-/**
- * After a win pad the player is back in the lobby with every wall standing (on the
- * server at once), but the corridor keeps showing the broken walls for a while and
- * then builds them back up (StageWalls). `stages`: walls of stages 1..stages stay
- * broken until `until` (clock seconds) — WALL_REBUILD_S after reaching the lobby —
- * or until the player heads back into the corridor.
- */
-export const wallHold = { stages: 0, until: 0, arrived: false, listeners: new Set<() => void>() }
-/** Seconds in the lobby before the walls are rebuilt. */
-export const WALL_REBUILD_S = 6
-/** The lobby is z > 0: in the lobby past this; walking back below it rebuilds at once. */
-export const WALL_REBUILD_NEAR_Z = 8
-/** If the trip to the lobby never comes (disconnect…), give up holding after this. */
-const WALL_HOLD_MAX_WAIT_S = 6
-
-/** Starts holding stages 1..stages down (a win pad was just claimed). */
-export function holdWalls(stages: number): void {
-  wallHold.stages = stages
-  wallHold.arrived = false
-  wallHold.until = now() + WALL_HOLD_MAX_WAIT_S
-  for (const l of wallHold.listeners) l()
-}
-
-/** Advances the hold (call a few times a second); false once the walls should stand. */
-export function wallHoldActive(): boolean {
-  if (wallHold.until === 0) return false
-  const z = localPlayer.pos.z
-  if (!wallHold.arrived) {
-    // Respawned in the lobby: the countdown starts now.
-    if (z > WALL_REBUILD_NEAR_Z) {
-      wallHold.arrived = true
-      wallHold.until = now() + WALL_REBUILD_S
-    }
-  } else if (z < WALL_REBUILD_NEAR_Z) wallHold.until = 0
-  if (wallHold.until !== 0 && now() >= wallHold.until) wallHold.until = 0
-  return wallHold.until !== 0
-}
-
 /** Auto Win steering: the controller walks towards (x, z) when there's no manual input. */
 export const autopilot = { active: false, x: 0, z: 0 }
 

@@ -60,6 +60,8 @@ export class PlayerSession {
   level: number
   /** Pending return to the lobby after a win pad. */
   respawnTimer: { clear(): void } | null = null
+  /** When the player came into the lobby (ms); 0 while out in the corridor. */
+  lobbySince = 0
   /** While dropped: the held reconnection (rejecting it ends the session now). */
   reconnection: Deferred<Client> | null = null
 

@@ -101,6 +101,11 @@ export function createRun(stage: number): StageRun {
   return { stage, wallsBroken: 0, wallHp: wallHp(stage, 1), padClaimed: false }
 }
 
+/** Whether a run has anything to reset: a broken wall, a later stage or a claimed pad. */
+export function runHasProgress(run: StageRun): boolean {
+  return run.stage !== 1 || run.wallsBroken > 0 || run.padClaimed
+}
+
 export interface WallHitResult {
   damage: number
   broken: boolean
