@@ -1,5 +1,7 @@
-import { useGLTF } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useLoader } from '@react-three/fiber'
+// three's own loader (also used by avatarLoader.js): drei's useGLTF would pull
+// three-stdlib's duplicate GLTF/Draco/Meshopt loaders into the bundle.
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
 import { Box3, MeshStandardMaterial, Vector3 } from 'three'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
@@ -14,6 +16,7 @@ import {
 } from '../bloxity/avatarAssets'
 import { loadOBJ, loadPartGLB, loadTexture } from '../bloxity/avatarLoader'
 import { useBloxity } from '../bloxity/BloxityContext'
+import { DEFAULT_PROPORTIONS } from '../bloxity/store'
 import {
   animateRig,
   applyPart,
@@ -53,11 +56,19 @@ function fallbackMotion(delta) {
  *   rescaled rather than trusted at native size.
  */
 export const PlayerAvatar = forwardRef(function PlayerAvatar(
-  { onReady, targetHeight = 1.8, motionRef, ...props },
+  { onReady, onRig, targetHeight = 1.8, motionRef, look, ...props },
   ref,
 ) {
-  const { avatar: equipped, proportions, game } = useBloxity()
-  const { scene: baseScene } = useGLTF(BASE_BODY_URL)
+  // `look` (another player's relayed AvatarLook) overrides the local Bloxity session.
+  const session = useBloxity()
+  const equipped = useMemo(() => (look ? look.e : session.avatar), [look, session.avatar])
+  const proportions = useMemo(
+    () => (look ? { ...DEFAULT_PROPORTIONS, ...look.p } : session.proportions),
+    [look, session.proportions],
+  )
+  const isLocal = !look
+  const game = session.game
+  const { scene: baseScene } = useLoader(GLTFLoader, BASE_BODY_URL)
   const [assembled, setAssembled] = useState(false)
 
   // The GLTF cache hands back one shared scene. Clone via SkeletonUtils so this
@@ -102,7 +113,7 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
     // hat/back can be removed rather than stacking up.
     const attached = []
 
-    game.loadingStep('Loading avatar…')
+    if (isLocal) game.loadingStep('Loading avatar…')
 
     const jobs = []
 
@@ -188,7 +199,7 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
         object.traverse((child) => child.geometry?.dispose())
       }
     }
-  }, [rig, equipped, game])
+  }, [rig, equipped, game, isLocal])
 
   // --- Proportions -------------------------------------------------------------
   // Applied per frame rather than in an effect: every bone is reset to its rest pose
@@ -213,6 +224,11 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
     if (assembled) onReady?.()
   }, [assembled, onReady])
 
+  // Lets the owner attach things that follow bones (the held boomerang).
+  useEffect(() => {
+    onRig?.(rig)
+  }, [rig, onRig])
+
   return (
     <group ref={ref} {...props}>
       {/* Fit scale lives on this wrapper, not on `character` - applyProportions
@@ -224,6 +240,6 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
   )
 })
 
-useGLTF.preload(BASE_BODY_URL)
+useLoader.preload(GLTFLoader, BASE_BODY_URL)
 
 export default PlayerAvatar

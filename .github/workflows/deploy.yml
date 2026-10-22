@@ -1,0 +1,159 @@
+# Ships the game to Bloxity Legion (see README → Hosting on Bloxity Legion).
+#   push to dev  → dev channel  (https://1-boomerang-per-click.dev.play.bloxity.io)
+#   push to main → prod channel (https://1-boomerang-per-click.play.bloxity.io)
+# Needs one repository secret: LEGION_DEPLOY_TOKEN. Optional: LEGION_DEPLOY_TOKEN_STAGE
+# also ships every push to the stage platform (stage.bloxity.io) as separate jobs.
+name: Deploy to Bloxity Legion
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+# One deploy per branch at a time; a newer push waits rather than cutting one off.
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  GAME_ID: 1-boomerang-per-click
+  # Players per server = the room's maxClients (MAX_CLIENTS in shared/src/protocol.ts).
+  SEAT_CAP: 8
+  CHANNEL: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+  LEGION_API: https://legion.bloxity.io
+  HOSTING_API: https://api.bloxity.io
+  # Stage platform endpoints. ASSUMPTION: the stage.bloxity.io counterparts of the two
+  # above — check them against Bloxity's Environments docs before adding the stage token.
+  LEGION_STAGE_API: https://legion.stage.bloxity.io
+  HOSTING_STAGE_API: https://api.stage.bloxity.io
+
+jobs:
+  server:
+    name: Game server
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.image.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Image name
+        id: image
+        # GHCR names must be lowercase.
+        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${GAME_ID}-server:${CHANNEL}-${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          push: true
+          tags: ${{ steps.image.outputs.ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Roll out on Legion
+        env:
+          TOKEN: ${{ secrets.LEGION_DEPLOY_TOKEN }}
+          IMAGE: ${{ steps.image.outputs.ref }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "::error::Add the LEGION_DEPLOY_TOKEN repository secret (README → Hosting)."; exit 1; fi
+          body=$(jq -nc --arg c "$CHANNEL" --arg i "$IMAGE" --arg v "$GITHUB_SHA" --argjson s "$SEAT_CAP" \
+            '{channel: $c, image: $i, version: $v, seatCap: $s}')
+          curl -sS --fail-with-body -X POST "$LEGION_API/v1/apps/$GAME_ID/deploy" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d "$body"
+
+  client:
+    name: Web client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        env:
+          VITE_GAME_SLUG: ${{ env.GAME_ID }}
+          # Players join through the matchmaker at play.bloxity.io …
+          VITE_LEGION_GAME_ID: ${{ env.GAME_ID }}
+          # … and HTTP goes to the channel's backend host.
+          VITE_SERVER_URL: https://${{ env.GAME_ID }}.${{ github.ref_name == 'main' && 'host' || 'dev.host' }}.bloxity.io
+        run: npm run build -w client
+
+      - name: Zip
+        run: cd client/dist && zip -qr "$GITHUB_WORKSPACE/build.zip" .
+
+      - name: Upload to Legion
+        env:
+          TOKEN: ${{ secrets.LEGION_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "::error::Add the LEGION_DEPLOY_TOKEN repository secret (README → Hosting)."; exit 1; fi
+          curl -sS --fail-with-body -X POST \
+            "$HOSTING_API/v1/hosting/games/$GAME_ID/frontend?channel=$CHANNEL&version=$GITHUB_SHA" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/zip' \
+            --data-binary @build.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-build
+          path: build.zip
+          retention-days: 3
+
+  # --- Stage platform: same image and build, its own token; no-ops without it --------
+  server-stage:
+    name: Game server (stage)
+    needs: server
+    runs-on: ubuntu-latest
+    env:
+      TOKEN: ${{ secrets.LEGION_DEPLOY_TOKEN_STAGE }}
+      IMAGE: ${{ needs.server.outputs.image }}
+    steps:
+      - name: Roll out on stage
+        if: env.TOKEN != ''
+        run: |
+          body=$(jq -nc --arg c "$CHANNEL" --arg i "$IMAGE" --arg v "$GITHUB_SHA" --argjson s "$SEAT_CAP" \
+            '{channel: $c, image: $i, version: $v, seatCap: $s}')
+          curl -sS --fail-with-body -X POST "$LEGION_STAGE_API/v1/apps/$GAME_ID/deploy" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d "$body"
+
+  client-stage:
+    name: Web client (stage)
+    needs: client
+    runs-on: ubuntu-latest
+    env:
+      TOKEN: ${{ secrets.LEGION_DEPLOY_TOKEN_STAGE }}
+    steps:
+      - uses: actions/download-artifact@v4
+        if: env.TOKEN != ''
+        with:
+          name: client-build
+
+      - name: Upload to stage
+        if: env.TOKEN != ''
+        run: |
+          curl -sS --fail-with-body -X POST \
+            "$HOSTING_STAGE_API/v1/hosting/games/$GAME_ID/frontend?channel=$CHANNEL&version=$GITHUB_SHA" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/zip' \
+            --data-binary @build.zip

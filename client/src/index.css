@@ -1,9 +1,13 @@
 @import 'tailwindcss';
+@import '@fontsource/lilita-one/latin-400.css';
 
 :root {
   color-scheme: dark;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Lilita One', 'Arial Black', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* Set from JS on resize: the whole HUD scales with the viewport. */
+  --hud-scale: 1;
+  --ink: #1b1b22;
 }
 
 html,
@@ -12,10 +16,789 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
+  background: #86c8fb;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 
-/* The R3F canvas fills its container; the HUD is absolutely positioned over it. */
-canvas {
+canvas,
+.game-canvas {
   display: block;
   touch-action: none;
+}
+
+.game-canvas {
+  position: absolute !important;
+  inset: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Chunky outlined text (the Roblox-sim look)
+ * ------------------------------------------------------------------------- */
+
+.txt-outline {
+  color: #fff;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 0.14em var(--ink);
+  text-shadow: 0 0.08em 0 var(--ink);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+/* Numbers that change (see ui/Num.tsx): every digit gets the same width, so
+   counters tick without the text around them shifting. */
+.num { display: inline-flex; align-items: baseline; white-space: nowrap; }
+.num .d { display: inline-block; width: 0.6em; text-align: center; }
+.num .p { display: inline-block; width: 0.3em; text-align: center; }
+
+.txt-outline-thin {
+  paint-order: stroke fill;
+  -webkit-text-stroke: 0.1em var(--ink);
+  line-height: 1.05;
+}
+
+/* ---------------------------------------------------------------------------
+ * HUD layout: corner groups scale from their corner
+ * ------------------------------------------------------------------------- */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hud-group {
+  position: absolute;
+  pointer-events: none;
+  transform: scale(var(--hud-scale));
+  /* A changed number inside a group never re-lays out the rest of the page. */
+  contain: layout style;
+}
+.hud-group > * {
+  pointer-events: auto;
+}
+.hud-tl { top: 12px; left: 12px; transform-origin: top left; }
+.hud-tr { top: 12px; right: 12px; transform-origin: top right; }
+.hud-l { top: 50%; left: 12px; transform-origin: left center; translate: 0 -50%; }
+.hud-r { top: 50%; right: 12px; transform-origin: right center; translate: 0 -50%; }
+.hud-bl { bottom: 12px; left: 12px; transform-origin: bottom left; }
+.hud-br { bottom: 12px; right: 12px; transform-origin: bottom right; }
+.hud-tc { top: 10px; left: 50%; transform-origin: top center; translate: -50% 0; }
+.hud-bc { bottom: 10px; left: 50%; transform-origin: bottom center; translate: -50% 0; }
+
+/* Studded lego surface used by buttons and panels. */
+.studs {
+  background-image:
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.22) 0 26%, transparent 28%),
+    radial-gradient(circle at 50% 58%, rgba(0, 0, 0, 0.16) 0 26%, transparent 28%);
+  background-size: 22px 22px;
+}
+
+.btn3d {
+  position: relative;
+  border: 4px solid var(--ink);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 -6px 0 rgba(0, 0, 0, 0.25),
+    inset 0 4px 0 rgba(255, 255, 255, 0.3),
+    0 4px 0 var(--ink);
+  cursor: pointer;
+  transition: transform 0.06s ease, filter 0.1s ease;
+}
+.btn3d:hover { filter: brightness(1.08); }
+.btn3d:active { transform: translateY(3px); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.25), 0 1px 0 var(--ink); }
+.btn3d:disabled { filter: grayscale(0.7) brightness(0.8); cursor: default; }
+
+.bg-cyan { background-color: #39c6ff; }
+.bg-red { background-color: #ff3b3b; }
+.bg-orange { background-color: #ff9a1f; }
+.bg-magenta { background-color: #ff4fd8; }
+.bg-green { background-color: #36d94a; }
+.bg-blue { background-color: #2f8cff; }
+.bg-yellow { background-color: #ffd21f; }
+.bg-purple { background-color: #9b4dff; }
+.bg-dark { background-color: #2a2d3a; }
+.bg-slate { background-color: #4b5c86; }
+
+/* ---------------------------------------------------------------------------
+ * HUD pieces
+ * ------------------------------------------------------------------------- */
+
+.currency-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 66px;
+  min-width: 260px;
+  padding-right: 18px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.12) 85%, transparent);
+  border-radius: 12px;
+}
+.currency-row .value {
+  font-size: 40px;
+  color: #ffd21f;
+}
+
+.menu-btn {
+  width: 128px;
+  height: 118px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 6px;
+}
+.menu-btn .label { font-size: 30px; }
+.menu-btn .icon { margin-bottom: auto; margin-top: 4px; }
+.menu-btn.is-open { outline: 4px solid #fff; outline-offset: 2px; }
+
+.settings-btn {
+  width: 98px;
+  height: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 2px;
+}
+.settings-btn .label { font-size: 19px; margin-top: -2px; }
+/* The gear turns a notch on hover / while Settings is open (transform only). */
+.settings-btn .gear { transition: transform 0.35s ease; }
+.settings-btn:hover .gear,
+.settings-btn.is-open .gear { transform: rotate(45deg); }
+.settings-btn.is-open { outline: 4px solid #fff; outline-offset: 2px; }
+
+.badge-corner {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  font-size: 28px;
+  transform: rotate(12deg);
+}
+.badge-left { left: -10px; right: auto; top: -10px; font-size: 22px; transform: rotate(-10deg); }
+.badge-alert {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #ff3b7a;
+  border: 3px solid var(--ink);
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  color: #fff;
+}
+
+.price-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 26px;
+  background: linear-gradient(90deg, #7dff6b, #36d9ff, #ff6bf0);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* A text stroke, not drop-shadow filters: filters add compositor effect nodes
+     that made every HUD change expensive to layerize on low-end phones. */
+  -webkit-text-stroke: 0.1em var(--ink);
+  paint-order: stroke fill;
+}
+
+/* Bottom: Power burst, level bar and four training buttons (the original game's layout) */
+.power-badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 320px;
+  height: 104px;
+}
+.power-badge .burst {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  width: 124px;
+  height: 124px;
+  translate: -50% 0;
+}
+.power-badge .value {
+  position: relative;
+  margin-top: 30px;
+  font-size: 46px;
+}
+/* Lego studs, as on the original's level bar and buttons. */
+.level-bar,
+.level-bar .fill::after {
+  background-image:
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.2) 0 24%, transparent 27%),
+    radial-gradient(circle at 50% 58%, rgba(0, 0, 0, 0.16) 0 24%, transparent 27%);
+  background-size: 20px 20px;
+}
+.level-bar {
+  position: relative;
+  width: 790px;
+  height: 52px;
+  border: 4px solid #5a2a00;
+  border-radius: 6px;
+  background-color: rgba(40, 20, 10, 0.55);
+  overflow: hidden;
+}
+.level-bar .fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #ffb13b, #ff7a00 60%, #e86400);
+  transition: transform 0.25s ease;
+  /* Its own layer: sliding it never repaints the studded bar. */
+  will-change: transform;
+}
+.level-bar .fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.level-bar .text {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  translate: 0 -50%;
+  font-size: 34px;
+}
+.train-row {
+  display: flex;
+  gap: 22px;
+  margin-top: 26px;
+}
+.train-tile {
+  width: 182px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+}
+.train-tile .gain { font-size: 42px; }
+.train-tile .tag {
+  position: absolute;
+  top: -24px;
+  left: -10px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 24px;
+  color: #3dffa0;
+}
+.train-tile .tag.cost { color: #ffd21f; }
+.train-tile.active { outline: 4px solid #fff; outline-offset: 3px; }
+
+.progress {
+  position: relative;
+  width: 540px;
+  height: 34px;
+  border: 3px solid var(--ink);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+.progress .fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(180deg, #5ec8ff, #1e88e5);
+  transition: width 0.2s ease;
+}
+.progress .text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+}
+
+
+.top-icon {
+  position: relative;
+  width: 74px;
+  height: 74px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+.top-icon:hover, .top-icon.active { background: rgba(0, 0, 0, 0.5); }
+
+.reward-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px 8px;
+}
+.top-icon .caption {
+  position: absolute;
+  bottom: -14px;
+  font-size: 20px;
+  white-space: nowrap;
+}
+
+.boost-row {
+  font-size: 26px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.interact-prompt {
+  margin-bottom: 26px !important; /* clear of the Power burst below */
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-radius: 14px;
+  background: rgba(10, 10, 20, 0.6);
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  font-size: 30px;
+  cursor: pointer;
+}
+.key-cap {
+  display: grid;
+  place-items: center;
+  min-width: 46px;
+  height: 46px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, #dfe3ee);
+  color: var(--ink);
+  border: 3px solid var(--ink);
+  box-shadow: 0 4px 0 var(--ink);
+  font-size: 30px;
+  line-height: 1;
+  /* The prompt around it uses outlined text; a key letter must stay crisp. */
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Floating "+X" popups (pooled DOM nodes)
+ * ------------------------------------------------------------------------- */
+
+.float-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 20;
+}
+.float-pop {
+  position: absolute;
+  opacity: 0;
+  translate: -50% 0;
+  white-space: nowrap;
+  /* Pooled and animated over and over: keep their compositor layers. */
+  will-change: transform, opacity;
+}
+
+/* ---------------------------------------------------------------------------
+ * Name tags, panels, overlays
+ * ------------------------------------------------------------------------- */
+
+.nametag-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+.nametag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 18px;
+  white-space: nowrap;
+  color: #d6e4ff;
+  transform: translate3d(-1000px, -1000px, 0);
+}
+.nametag-level {
+  margin-left: 6px;
+  font-size: 14px;
+  color: #ffd21f;
+}
+
+
+.overlay-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 40;
+  pointer-events: auto;
+}
+.overlay-dim {
+  background: rgba(8, 10, 20, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.panel-card {
+  padding: 18px 28px;
+  border-radius: 16px;
+  background: rgba(20, 22, 32, 0.92);
+  border: 4px solid var(--ink);
+  font-size: 30px;
+}
+
+.window {
+  position: relative;
+  width: min(880px, calc(100vw - 32px));
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  border: 6px solid var(--ink);
+  border-radius: 18px;
+  background: #24262f;
+  box-shadow: 0 10px 0 rgba(0, 0, 0, 0.35);
+  transform-origin: center;
+  animation: pop-in 0.18s ease-out;
+}
+.window-scale {
+  transform: scale(min(1, var(--hud-scale) * 1.1));
+  transform-origin: center;
+}
+@keyframes pop-in {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.window-title {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  translate: -50% 0;
+  font-size: 60px;
+  white-space: nowrap;
+}
+.window-close {
+  position: absolute;
+  top: -26px;
+  right: -26px;
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  background: #ff4f8b;
+  z-index: 2;
+}
+.window-body {
+  padding: 34px 20px 20px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #555 transparent;
+}
+.window-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 30px 20px 0;
+}
+.tab-btn {
+  padding: 8px 18px;
+  font-size: 24px;
+  border-radius: 10px;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border: 4px solid var(--ink);
+  border-radius: 12px;
+  background: #1a1c24;
+}
+.list-row.highlight {
+  border-color: #39c6ff;
+  box-shadow: 0 0 0 3px rgba(57, 198, 255, 0.5);
+}
+.mult-box {
+  min-width: 140px;
+  padding: 6px 10px;
+  border: 4px solid var(--ink);
+  border-radius: 8px;
+  background: #111218;
+  text-align: center;
+}
+.mult-box .big { font-size: 38px; color: #ffd21f; }
+.mult-box .small { font-size: 20px; }
+
+.buy-btn {
+  min-width: 170px;
+  height: 58px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 30px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 18px;
+}
+
+.body-text {
+  font-family: system-ui, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  color: #dfe3ee;
+}
+
+.reveal-card {
+  width: 220px;
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 6px solid #fff;
+  border-radius: 18px;
+  background: #1a1c24;
+  animation: card-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+@keyframes card-in {
+  from { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes egg-shake {
+  0% { transform: rotate(-6deg) translateX(-4px); }
+  50% { transform: rotate(6deg) translateX(4px); }
+  100% { transform: rotate(-6deg) translateX(-4px); }
+}
+@keyframes egg-burst {
+  from { transform: scale(1); opacity: 1; filter: brightness(1); }
+  to { transform: scale(1.9); opacity: 0; filter: brightness(3); }
+}
+
+/* ---------------------------------------------------------------------------
+ * Touch controls
+ * ------------------------------------------------------------------------- */
+
+.joystick {
+  position: absolute;
+  left: 24px;
+  bottom: 24px;
+  width: 170px;
+  height: 170px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  z-index: 15;
+  touch-action: none;
+  pointer-events: auto;
+}
+.joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 74px;
+  height: 74px;
+  margin: -37px 0 0 -37px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  border: 3px solid var(--ink);
+}
+.throw-btn {
+  position: absolute;
+  right: 28px;
+  bottom: 150px;
+  width: 128px;
+  height: 128px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  z-index: 15;
+  touch-action: none;
+  pointer-events: auto;
+}
+
+/* ---------------------------------------------------------------------------
+ * Touch layout: room for the stick (bottom-left) and THROW (bottom-right)
+ * ------------------------------------------------------------------------- */
+
+.touch .hud-l {
+  /* Below the top-left corner, which hosts keep free for their game logo. */
+  top: 30%;
+  translate: none;
+  transform-origin: top left;
+  transform: scale(calc(var(--hud-scale) * 0.85));
+}
+.touch .currency-col {
+  flex-direction: row;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.touch .currency-row {
+  min-width: 0;
+  height: 58px;
+  padding-right: 12px;
+  gap: 4px;
+}
+.touch .hud-bl {
+  top: calc(190px * var(--hud-scale) + 10px);
+  bottom: auto;
+  left: 50%;
+  translate: -50% 0;
+  transform-origin: top center;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 1400px;
+}
+.touch .joystick {
+  left: 18px;
+  bottom: 18px;
+  width: 150px;
+  height: 150px;
+}
+.touch .throw-btn {
+  right: 18px;
+  bottom: 18px;
+  width: 112px;
+  height: 112px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .window, .stage-clear { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
+ * Win pad payout: banner + trophies flying to the Wins counter
+ * ------------------------------------------------------------------------- */
+
+.stage-clear {
+  position: absolute;
+  top: 20%;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 45;
+  pointer-events: none;
+  transform: scale(var(--hud-scale));
+  transform-origin: top center;
+  animation: stage-clear-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+/*
+ * Gradient-filled text with a thick outline: the element draws the dark outline
+ * (stroke + fill in ink), and an exact copy on top (::after, from data-text) is
+ * filled with the gradient. A stroke and a text-clipped gradient on one element
+ * paint over each other and leave only thin streaks of colour.
+ */
+.grad-text {
+  position: relative;
+  display: inline-block;
+  color: var(--ink);
+  -webkit-text-stroke: 0.16em var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 0.1em 0 var(--ink);
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.grad-text::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  color: transparent;
+  background: var(--grad, linear-gradient(180deg, #fff, #ddd));
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.stage-clear .ribbon {
+  padding: 8px 90px 14px;
+  background: linear-gradient(90deg, transparent, rgba(124, 58, 237, 0.88) 16%, rgba(236, 72, 153, 0.88) 84%, transparent);
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-image: linear-gradient(90deg, transparent, #ffe14a 20%, #ffe14a 80%, transparent) 1;
+}
+.stage-clear .title {
+  font-size: 76px;
+  --grad: linear-gradient(180deg, #fffbe0 8%, #ffe14a 42%, #ffad0a 72%, #ff7a00 100%);
+}
+.stage-clear .wins {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 52px;
+  --grad: linear-gradient(180deg, #f0ffe0 6%, #8dff5a 45%, #22d65f 100%);
+}
+@keyframes stage-clear-in {
+  from { opacity: 0; scale: 0.6; }
+  to { opacity: 1; scale: 1; }
+}
+.fly-trophy {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: calc(46px * var(--hud-scale));
+  height: calc(46px * var(--hud-scale));
+  margin: calc(-23px * var(--hud-scale)) 0 0 calc(-23px * var(--hud-scale));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fly-gain {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -50%;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: calc(30px * var(--hud-scale));
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+.fly-gain img {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+/* Stage wall label: STAGE n / MATERIAL / a dark pill HP bar with a green fill */
+.wall-label {
+  display: flex;
+  width: 320px;
+  flex-direction: column;
+  align-items: center;
+}
+.wall-hp {
+  position: relative;
+  width: 300px;
+  height: 44px;
+  margin-top: 8px;
+  padding: 5px;
+  border-radius: 14px;
+  background: rgba(10, 12, 20, 0.85);
+}
+.wall-hp .fill {
+  height: 100%;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #6bff9a, #22c45e);
+  transition: width 0.15s ease;
+}
+.wall-hp .text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
 }

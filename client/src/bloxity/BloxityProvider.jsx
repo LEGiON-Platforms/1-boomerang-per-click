@@ -69,9 +69,9 @@ function initOnce(gameSlug, signal) {
  * @param {{ gameSlug?: string, children: React.ReactNode }} props
  */
 export function BloxityProvider({ gameSlug, children }) {
-  // >>> FILL ME IN <<< Set VITE_GAME_SLUG in client/.env to the slug from your
-  // Bloxity developer dashboard. The `gameSlug` prop overrides it if passed.
-  const slug = gameSlug || import.meta.env.VITE_GAME_SLUG || 'MY_GAME_SLUG'
+  // The game's id on Bloxity (My Games). VITE_GAME_SLUG overrides it; the
+  // `gameSlug` prop overrides both.
+  const slug = gameSlug || import.meta.env.VITE_GAME_SLUG || '1-boomerang-per-click'
 
   const status = useBloxityStore((s) => s.status)
   const error = useBloxityStore((s) => s.error)
