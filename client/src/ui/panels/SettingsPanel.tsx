@@ -74,11 +74,10 @@ export function SettingsPanel() {
       <Toggle label="Music" value={q.music} onChange={q.setMusic} />
       <Toggle label="Sound Effects" value={q.sfx} onChange={q.setSfx} />
       <Toggle label="Hide other players' pets" value={q.hideOtherPets} onChange={q.setHideOtherPets} />
-      {import.meta.env.DEV && <Toggle label="Performance overlay (dev)" value={q.showPerf} onChange={q.setShowPerf} />}
 
       <div className="body-text mt-2 text-[15px] opacity-80">
         Controls: WASD / arrows to move · Shift sprint · Space jump · Click or F to throw · E to interact · Right-drag to turn the
-        camera · Scroll to zoom. On phones: left stick to move, tap anywhere to throw, drag to look.
+        camera · Scroll to zoom. On phones: left stick to move, the blue button to jump, tap anywhere to throw, drag to look.
         <br />
         Room: {roomId}
       </div>
