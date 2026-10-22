@@ -7,6 +7,7 @@ import { useGame } from '../state/gameStore'
 import { useQuality } from '../state/qualityStore'
 import { BoomerangInstances } from './fx/BoomerangInstances'
 import { ParticleSystem } from './fx/ParticleSystem'
+import { TrailRibbons } from './fx/TrailRibbons'
 import { FollowCamera } from './FollowCamera'
 import { Lighting } from './Lighting'
 import { Lobby } from './lobby/Lobby'
@@ -116,6 +117,7 @@ export function GameCanvas({ onAvatarReady, onFirstFrame, children }: Props) {
         </Suspense>
         <RemotePlayers />
         <BoomerangInstances />
+        <TrailRibbons />
         <ParticleSystem />
         {children}
         <FollowCamera />

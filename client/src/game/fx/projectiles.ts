@@ -17,6 +17,8 @@ export const IMPACT = { none: 0, wall: 1, dummy: 2 } as const
 
 export interface Projectile {
   active: boolean
+  /** Unique per launch, so renderers can tell a reused slot from the same throw. */
+  id: number
   /** 'local' or a remote sessionId. */
   owner: string
   seq: number
@@ -36,6 +38,7 @@ export interface Projectile {
 
 export const projectiles: Projectile[] = Array.from({ length: PROJECTILE_CAPACITY }, () => ({
   active: false,
+  id: 0,
   owner: '',
   seq: 0,
   t: 0,
@@ -51,6 +54,7 @@ export const projectiles: Projectile[] = Array.from({ length: PROJECTILE_CAPACIT
 }))
 
 let cursor = 0
+let nextId = 1
 
 const hex = (s: string) => parseInt(s.slice(1), 16)
 const LOOKS = BOOMERANGS.map((b) => ({ color: b.color, hex: hex(b.color), glow: b.glow }))
@@ -76,6 +80,7 @@ export function launch(
   cursor = (cursor + 1) % PROJECTILE_CAPACITY
   const look = boomerangLook(boomerang, vip)
   p.active = true
+  p.id = nextId++
   p.owner = owner
   p.seq = seq
   p.t = 0

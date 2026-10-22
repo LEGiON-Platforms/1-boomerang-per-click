@@ -107,6 +107,25 @@ if (stepsArg === 'clear' || stepsArg === 'all') {
   await shot(page, '05-stage-clear')
 }
 
+if (stepsArg === 'panels' || stepsArg === 'all') {
+  // Close anything open, then visit each menu in turn.
+  await page.keyboard.press('Escape')
+  if (await page.getByText('Farm Again ↻').isVisible().catch(() => false)) await page.getByText('Farm Again ↻').click()
+  await sleep(400)
+  for (const [label, file] of [
+    ['Trails', '06-trails'],
+    ['Shop', '07-shop'],
+    ['Rebirth', '08-rebirth'],
+    ['Stages', '09-stages'],
+  ] as const) {
+    await page.locator('button', { hasText: label }).first().click()
+    await sleep(700)
+    await shot(page, file)
+    await page.keyboard.press('Escape')
+    await sleep(300)
+  }
+}
+
 const info = await page.evaluate(() => window.__bpcRenderInfo?.() ?? null)
 console.log('render info', JSON.stringify(info))
 console.log(errors.length ? `console errors/warnings:\n${errors.slice(0, 30).join('\n')}` : 'no console errors')

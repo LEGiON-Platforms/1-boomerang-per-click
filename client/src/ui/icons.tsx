@@ -183,8 +183,14 @@ export function LockIcon({ size, className, style }: IconProps) {
 export function BoomerangIcon({ size, className, style, color = '#c98a4b' }: IconProps & { color?: string }) {
   return (
     <svg viewBox="0 0 64 64" style={{ ...box(size), ...style }} className={className}>
-      <path d="M32 14L58 40l-6 7-20-20-20 20-6-7z" fill={color} stroke={STROKE} strokeWidth="4" strokeLinejoin="round" />
-      <path d="M32 20l20 20M32 20L12 40" stroke="rgba(255,255,255,0.45)" strokeWidth="3" />
+      <path
+        d="M5 41 L29 13 Q32 10 35 13 L59 41 Q62 47 55 50 Q51 51 48 48 L32 31 L16 48 Q13 51 9 50 Q2 47 5 41 Z"
+        fill={color}
+        stroke={STROKE}
+        strokeWidth="4"
+        strokeLinejoin="round"
+      />
+      <path d="M12 41 L31 19 M52 41 L33 19" stroke="rgba(255,255,255,0.45)" strokeWidth="3" strokeLinecap="round" />
     </svg>
   )
 }
