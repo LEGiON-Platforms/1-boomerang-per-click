@@ -15,8 +15,7 @@ import {
   VIP_BOOMERANG,
   VIP_DISPLAY,
 } from '@game/shared'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { MeshBasicMaterial } from 'three'
+import { useEffect, useState } from 'react'
 
 import { useGame } from '../../state/gameStore'
 import { useQuality } from '../../state/qualityStore'
@@ -29,7 +28,8 @@ import {
   roundRect,
   vGradient,
 } from '../canvasText'
-import { buildSignAtlas, type SignAtlas, type SignSpec } from '../signs'
+import { SignPagesMesh } from '../SignPagesMesh'
+import { buildSignPages, type SignPage, type SignSpec } from '../signs'
 import { displayStart } from './boomerangDisplay'
 
 /** Font and icon images must be ready before anything is drawn into a canvas. */
@@ -278,10 +278,9 @@ export function LobbySigns() {
   const boomerangsOwned = useGame((s) => s.data?.boomerangsOwned ?? 1)
   const vip = useGame((s) => s.data?.vipBoomerang ?? false)
   const ppu = useQuality((s) => s.settings.signPpu)
-  const maxSize = useQuality((s) => (s.settings.textureSize >= 512 ? 1024 : 512))
-
-  const [atlas, setAtlas] = useState<SignAtlas | null>(null)
-  const atlasRef = useRef<SignAtlas | null>(null)
+  // LOW pages stay 512² (one page per area of text costs one draw call).
+  const pageSize = useQuality((s) => (s.settings.textureSize >= 512 ? 1024 : 512))
+  const [pages, setPages] = useState<SignPage[] | null>(null)
 
   // Painting ~50 outlined-text signs is slow on a phone CPU, so the first atlas
   // waits until the player has joined and the browser is idle (time to playable);
@@ -297,41 +296,9 @@ export function LobbySigns() {
 
   useEffect(() => {
     if (!deferDone) return
-    const next = buildSignAtlas(
-      buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }),
-      ppu,
-      maxSize,
-      atlasRef.current ?? undefined,
-    )
-    atlasRef.current = next
-    setAtlas(next)
-  }, [deferDone, rebirths, bestStage, boomerangsOwned, vip, ppu, maxSize])
+    setPages(buildSignPages(buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }), ppu, pageSize))
+  }, [deferDone, rebirths, bestStage, boomerangsOwned, vip, ppu, pageSize])
 
-  const material = useMemo(
-    () => new MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false }),
-    [],
-  )
-  useEffect(() => {
-    material.map = atlas?.texture ?? null
-    material.needsUpdate = true
-  }, [atlas, material])
-
-  useEffect(
-    () => () => {
-      material.dispose()
-    },
-    [material],
-  )
-  // On unmount only: rebuilds reuse and dispose the previous atlas themselves.
-  useEffect(
-    () => () => {
-      atlasRef.current?.texture.dispose()
-      atlasRef.current?.geometry.dispose()
-      atlasRef.current = null
-    },
-    [],
-  )
-
-  if (!atlas) return null
-  return <mesh geometry={atlas.geometry} material={material} renderOrder={2} />
+  if (!pages) return null
+  return <SignPagesMesh pages={pages} transparent renderOrder={2} />
 }

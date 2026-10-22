@@ -71,7 +71,7 @@ import {
   sanitizeName,
   SPAWN,
   STAGE_COUNT,
-  inCorridor,
+  stageAtZ,
   stageSpawn,
   TARGET,
   THROW,
@@ -237,7 +237,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     s.state.y = 0
     s.state.z = z
     s.state.rotY = rotY
-    s.state.stage = inCorridor(z) ? s.run.stage : 0
+    s.state.stage = stageAtZ(z)
     s.teleportUntil = Date.now() + 1000
     s.client.send(S2C.teleport, { x, z, rotY })
   }
@@ -340,15 +340,15 @@ export class GameRoom extends Room<{ state: GameState }> {
       if (!onWinPad(s.pos, s.run.stage)) return this.error(s, 'too_far')
       const r = claimPad(s.data, s.run, Date.now())
       if (!r.ok) return this.error(s, r.error)
-      s.client.send(S2C.padClaimed, { stage: s.run.stage, wins: r.wins, unlocked: r.unlocked })
+      s.client.send(S2C.padClaimed, { stage: s.run.stage, wins: r.wins })
       this.sendRun(s)
       this.changed(s)
-      // After a short celebration: back to the lobby, lined up for the next stage.
+      // After a short celebration: back to the lobby, where every wall stands again
+      // (the run restarts at stage 1; Settings → Stages jumps further).
       s.respawnTimer?.clear()
       s.respawnTimer = this.clock.setTimeout(() => {
         s.respawnTimer = null
-        const stage = s.run.stage
-        s.run = createRun(stage < STAGE_COUNT && isStageUnlocked(s.data, stage + 1) ? stage + 1 : stage)
+        s.run = createRun(1)
         this.teleport(s, SPAWN.x, SPAWN.z, SPAWN.rotY)
         this.sendRun(s)
       }, PAD_RESPAWN_MS)
@@ -569,7 +569,12 @@ export class GameRoom extends Room<{ state: GameState }> {
     ps.z = c.z
     ps.rotY = m.r
     ps.anim = clamp(Math.floor(m.a), 0, ANIM.jump)
-    ps.stage = inCorridor(c.z) ? s.run.stage : 0
+    ps.stage = stageAtZ(c.z)
+    // Walking through an open gate into the next stage moves the run on to it.
+    if (s.run.wallsBroken >= WALLS_PER_STAGE && s.run.stage < STAGE_COUNT && ps.stage === s.run.stage + 1) {
+      s.run = createRun(s.run.stage + 1)
+      this.sendRun(s)
+    }
     if (corrected) this.teleport(s, c.x, c.z, m.r)
   }
 
@@ -586,14 +591,14 @@ export class GameRoom extends Room<{ state: GameState }> {
     if (padId >= 0) {
       result.t = TARGET.dummy
       result.pad = padId
-    } else if (inCorridor(s.pos.z) && s.run.wallsBroken < WALLS_PER_STAGE) {
+    } else if (stageAtZ(s.pos.z) === s.run.stage && s.run.wallsBroken < WALLS_PER_STAGE) {
       // Only the active stage's next wall, and only when it is in front and in reach.
       const distance = s.pos.z - wallZ(s.run.stage, s.run.wallsBroken + 1)
       if (distance >= -1 && distance <= THROW.range + RANGE_TOLERANCE) {
         const wall = s.run.wallsBroken + 1
         const hit = hitWall(d, s.run, d.power, now)
         result.t = TARGET.wall
-        result.hit = { damage: hit.damage, broken: hit.broken, winsGained: hit.winsGained, wall }
+        result.hit = { damage: hit.damage, broken: hit.broken, winsGained: hit.winsGained, wall, unlocked: hit.unlocked }
         result.run = s.runState()
         result.w = d.wins
         if (hit.broken) s.syncDirty = true

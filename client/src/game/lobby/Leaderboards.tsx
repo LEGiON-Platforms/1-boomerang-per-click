@@ -1,11 +1,11 @@
 import { formatNumber, LEADERBOARD_SPOTS, type LeaderboardEntry } from '@game/shared'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { MeshBasicMaterial } from 'three'
+import { useEffect, useState } from 'react'
 
 import { useGame } from '../../state/gameStore'
 import { useQuality } from '../../state/qualityStore'
 import { drawIcon, drawOutlined, roundRect, vGradient } from '../canvasText'
-import { buildSignAtlas, type SignAtlas, type SignSpec } from '../signs'
+import { SignPagesMesh } from '../SignPagesMesh'
+import { buildSignPages, type SignPage, type SignSpec } from '../signs'
 import { useCanvasAssets } from './LobbySigns'
 
 const BOARD_W = 12
@@ -63,10 +63,10 @@ function boardSpec(
 export function Leaderboards() {
   const ready = useCanvasAssets()
   const boards = useGame((s) => s.leaderboards)
-  const ppu = useQuality((s) => Math.min(s.settings.signPpu, 28))
-  const maxSize = useQuality((s) => (s.settings.textureSize >= 512 ? 1024 : 512))
-  const [atlas, setAtlas] = useState<SignAtlas | null>(null)
-  const atlasRef = useRef<SignAtlas | null>(null)
+  const ppu = useQuality((s) => s.settings.signPpu)
+  // LOW pages stay 512² (one page per area of text costs one draw call).
+  const pageSize = useQuality((s) => (s.settings.textureSize >= 512 ? 1024 : 512))
+  const [pages, setPages] = useState<SignPage[] | null>(null)
 
   useEffect(() => {
     if (!ready) return
@@ -75,27 +75,9 @@ export function Leaderboards() {
       boardSpec(1, 'HIGHEST STAGE', 'target', boards.stage, ['#ff5a5a', '#c81e3c']),
       boardSpec(2, 'TOP REBIRTHS', 'rebirth', boards.rebirths, ['#c46bff', '#7b2fbf']),
     ]
-    const next = buildSignAtlas(specs, ppu, maxSize, atlasRef.current ?? undefined)
-    atlasRef.current = next
-    setAtlas(next)
-  }, [ready, boards, ppu, maxSize])
+    setPages(buildSignPages(specs, ppu, pageSize))
+  }, [ready, boards, ppu, pageSize])
 
-  const material = useMemo(() => new MeshBasicMaterial({ toneMapped: false }), [])
-  useEffect(() => {
-    material.map = atlas?.texture ?? null
-    material.needsUpdate = true
-  }, [atlas, material])
-
-  useEffect(
-    () => () => {
-      material.dispose()
-      atlasRef.current?.texture.dispose()
-      atlasRef.current?.geometry.dispose()
-      atlasRef.current = null
-    },
-    [material],
-  )
-
-  if (!atlas) return null
-  return <mesh geometry={atlas.geometry} material={material} />
+  if (!pages) return null
+  return <SignPagesMesh pages={pages} />
 }

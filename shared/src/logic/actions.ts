@@ -105,11 +105,13 @@ export interface WallHitResult {
   broken: boolean
   winsGained: number
   stageCleared: boolean
+  /** Stage newly unlocked by this break (its gate opens), or 0. */
+  unlocked: number
 }
 
 /** Hits the run's current wall with `damage`. No overflow into the next wall. */
 export function hitWall(d: PlayerData, run: StageRun, damage: number, now: number): WallHitResult {
-  const result: WallHitResult = { damage: 0, broken: false, winsGained: 0, stageCleared: false }
+  const result: WallHitResult = { damage: 0, broken: false, winsGained: 0, stageCleared: false, unlocked: 0 }
   if (run.wallsBroken >= WALLS_PER_STAGE || damage <= 0) return result
 
   result.damage = Math.min(damage, run.wallHp)
@@ -125,13 +127,22 @@ export function hitWall(d: PlayerData, run: StageRun, damage: number, now: numbe
   if (run.wallsBroken < WALLS_PER_STAGE) {
     run.wallHp = wallHp(run.stage, run.wallsBroken + 1)
   } else {
+    // All 10 walls down: the stage is cleared and the next one unlocks — its gate
+    // opens so the player can walk straight on (the Wins pad is optional).
     run.wallHp = 0
     result.stageCleared = true
+    const before = d.stageCleared
+    d.stageCleared = Math.max(d.stageCleared, run.stage)
+    d.bestStageEver = Math.max(d.bestStageEver, run.stage)
+    d.dailyQuests.stageBest = Math.max(d.dailyQuests.stageBest, run.stage)
+    d.weeklyQuests.stageBest = Math.max(d.weeklyQuests.stageBest, run.stage)
+    result.unlocked = d.stageCleared > before && d.stageCleared < STAGE_COUNT ? d.stageCleared + 1 : 0
   }
   return result
 }
 
-export function claimPad(d: PlayerData, run: StageRun, now: number): Result<{ wins: number; unlocked: number }> {
+/** The Wins pad of the run's stage (its walls must be down). Claiming ends the run. */
+export function claimPad(d: PlayerData, run: StageRun, now: number): Result<{ wins: number }> {
   if (run.wallsBroken < WALLS_PER_STAGE) return fail('walls_remaining')
   if (run.padClaimed) return fail('already_claimed')
 
@@ -139,13 +150,7 @@ export function claimPad(d: PlayerData, run: StageRun, now: number): Result<{ wi
   addWins(d, wins)
   run.padClaimed = true
   d.stats.padsClaimed += 1
-  const before = d.stageCleared
-  d.stageCleared = Math.max(d.stageCleared, run.stage)
-  d.bestStageEver = Math.max(d.bestStageEver, run.stage)
-  d.dailyQuests.stageBest = Math.max(d.dailyQuests.stageBest, run.stage)
-  d.weeklyQuests.stageBest = Math.max(d.weeklyQuests.stageBest, run.stage)
-  const unlocked = d.stageCleared > before && d.stageCleared < STAGE_COUNT ? d.stageCleared + 1 : 0
-  return { ok: true, wins, unlocked }
+  return { ok: true, wins }
 }
 
 /* ---------------------------------------------------------------------------
@@ -568,7 +573,7 @@ export function advanceTutorial(d: PlayerData, run: StageRun | null): boolean {
   if (d.tutorialStep === TUTORIAL_STEPS.breakWalls && (d.stageCleared > 0 || (run && run.wallsBroken >= WALLS_PER_STAGE))) {
     d.tutorialStep = TUTORIAL_STEPS.collectWins
   }
-  if (d.tutorialStep === TUTORIAL_STEPS.collectWins && d.stageCleared > 0) {
+  if (d.tutorialStep === TUTORIAL_STEPS.collectWins && d.stats.padsClaimed > 0) {
     d.tutorialStep = TUTORIAL_STEPS.buyTrail
   }
   if (d.tutorialStep === TUTORIAL_STEPS.buyTrail && d.trailsOwned.includes(TUTORIAL.trailId)) {

@@ -5,7 +5,7 @@ import {
   formatNumber,
   isPadUnlocked,
   padAtPosition,
-  inCorridor,
+  stageAtZ,
   stageDef,
   TARGET,
   THROW,
@@ -22,6 +22,7 @@ import { send } from '../net/connection'
 import type { RemotePlayer } from '../net/remote'
 import { game, serverNow, useGame } from '../state/gameStore'
 import { quality } from '../state/qualityStore'
+import { ui } from '../state/uiStore'
 import { flyGain, spawnFloat } from '../ui/floating'
 import { IMPACT, launch, resolveImpact } from './fx/projectiles'
 import { DUMMY_STRIKE } from './lobby/Dummies'
@@ -57,7 +58,7 @@ export function computeTarget(): typeof target {
   }
   target.pad = -1
   const run = g.run
-  if (inCorridor(p.z) && run.wallsBroken < WALLS_PER_STAGE) {
+  if (stageAtZ(p.z) === run.stage && run.wallsBroken < WALLS_PER_STAGE) {
     const wz = wallZ(run.stage, run.wallsBroken + 1)
     const distance = p.z - wz
     if (distance >= -1 && distance <= THROW.range) {
@@ -146,6 +147,7 @@ export function onThrowResult(m: ThrowResultMsg): void {
     resolveImpact('local', m.s, IMPACT.wall, at, color, m.hit.broken)
     if (!m.hit.broken) wallFx.hitAt = now()
     if (m.hit.winsGained > 0) spawnFloat(`+${formatNumber(m.hit.winsGained)} Wins`, '#ffe14a', 50, 62, true)
+    if (m.hit.unlocked) ui().toast(`Stage ${m.hit.unlocked} unlocked — the gate is open!`, 'success')
   } else if (m.t === TARGET.dummy && m.pad !== undefined) {
     const dummy = TRAINING_PAD_SPOTS[m.pad].dummy
     resolveImpact('local', m.s, IMPACT.dummy, { x: dummy.x + DUMMY_STRIKE.dx, y: DUMMY_STRIKE.y, z: dummy.z }, '#ffd36a', false)

@@ -10,6 +10,7 @@ import {
   PAD_X,
   padZ,
   REWARD_ROOM,
+  STAGE_COUNT,
   STAGE_LENGTH,
   stageDef,
   stageStartZ,
@@ -23,6 +24,7 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   type BufferGeometry,
   Color,
+  DoubleSide,
   type InstancedMesh,
   Matrix4,
   type Mesh,
@@ -69,9 +71,12 @@ const TIERS: [number, number, number][] = [
   [0, 4, 12],
   [4, 12, 20],
 ]
-/** The end wall: as tall as the inner cliff tier; WALL_THICKNESS / 2 deep (see barrierMinZ). */
+/** The reward room's end wall, beside the gate into the next stage. */
 const END_WALL_HEIGHT = 12
-const END_WALL_DEPTH = WALL_THICKNESS / 2
+const END_WALL_DEPTH = 1.4
+/** Gate posts stand just inside the next stage's corridor width. */
+const GATE_POST_X = CORRIDOR.halfWidth + 0.3
+const GATE_HEIGHT = 12
 
 function boxes(top: boolean, tile: number): BufferGeometry {
   const parts: BufferGeometry[] = []
@@ -85,15 +90,12 @@ function boxes(top: boolean, tile: number): BufferGeometry {
       }
     }
   }
-  if (!top) {
-    // The corridor's closed end: one wall across the whole reward room, its face
-    // exactly where the movement barrier stops the player.
-    const g = createWorldBoxGeometry(REWARD_ROOM.halfWidth * 2, END_WALL_HEIGHT, END_WALL_DEPTH, tile)
-    g.translate(0, END_WALL_HEIGHT / 2, -STAGE_LENGTH + END_WALL_DEPTH / 2)
-    parts.push(g)
-  } else {
-    const g = createWorldBoxGeometry(REWARD_ROOM.halfWidth * 2, 0.5, END_WALL_DEPTH, tile)
-    g.translate(0, END_WALL_HEIGHT + 0.25, -STAGE_LENGTH + END_WALL_DEPTH / 2)
+  // The reward room's end wall either side of the gate, outside the gate posts.
+  const inner = GATE_POST_X + 0.5
+  const w = REWARD_ROOM.halfWidth - inner
+  for (const side of [-1, 1]) {
+    const g = createWorldBoxGeometry(w, top ? 0.5 : END_WALL_HEIGHT, END_WALL_DEPTH, tile)
+    g.translate(side * (inner + w / 2), top ? END_WALL_HEIGHT + 0.25 : END_WALL_HEIGHT / 2, -STAGE_LENGTH + END_WALL_DEPTH / 2)
     parts.push(g)
   }
   const merged = mergeGeometries(parts, false)!
@@ -113,9 +115,12 @@ function floorGeometry(): BufferGeometry {
   return merged
 }
 
-/** Corridor decoration in one vertex-coloured geometry: pad rim, trees. */
+/** Per-stage decoration in one vertex-coloured geometry: gate frame, pad rim, trees. */
 function buildDecor(): BufferGeometry {
   const b = new PropBuilder()
+  const gate = -STAGE_LENGTH
+  for (const side of [-1, 1]) b.block(side * GATE_POST_X, 0, gate + END_WALL_DEPTH / 2, 1, GATE_HEIGHT, END_WALL_DEPTH, '#f1f1f6')
+  b.block(0, GATE_HEIGHT, gate + END_WALL_DEPTH / 2, GATE_POST_X * 2 + 1, 1.4, END_WALL_DEPTH, '#ff5c8a')
   b.block(PAD_X, 0, -PAD_OFFSET, PAD_SIZE.w + 1, 0.2, PAD_SIZE.d + 1, '#2a2d3a')
   for (let z = -8; z > -STAGE_LENGTH; z -= 16) {
     // Trees stand on the outer cliff tier, which steps out around the reward room.
@@ -126,14 +131,17 @@ function buildDecor(): BufferGeometry {
   return b.build()
 }
 
-/**
- * The stage drawn in the corridor: the player's own current stage (per-player
- * walls — other players see their own). After a Wins pad the run moves on, so the
- * next stage's walls stand there, fresh, when the player is back in the lobby.
- */
+/** Which stages of the line are drawn: the one the player is in and its neighbours. */
 function useStageWindow(): number[] {
-  const stage = useGame((s) => s.run.stage)
-  return useMemo(() => [stage], [stage])
+  const here = useGame((s) => s.stageHere)
+  return useMemo(() => {
+    const center = Math.max(1, here)
+    const out: number[] = []
+    for (let st = center - 1; st <= center + 2 && out.length <= MAX_WINDOW; st += 1) {
+      if (st >= 1 && st <= STAGE_COUNT) out.push(st)
+    }
+    return out
+  }, [here])
 }
 
 /** Floor, cliffs, grass and decor: one instance per visible stage of each. */
@@ -319,48 +327,71 @@ function CrackOverlay() {
   )
 }
 
-/** The glowing win pad. */
-function WinPads({ stages }: { stages: number[] }) {
+/**
+ * The glowing win pads and the translucent barriers on shut gates. A stage's gate
+ * opens once its 10 walls are down (the next stage is unlocked then); stages
+ * already passed in this run stay open, the final stage's gate never opens.
+ */
+function PadsAndGates({ stages }: { stages: number[] }) {
   const padRef = useRef<InstancedMesh>(null)
+  const gateRef = useRef<InstancedMesh>(null)
   const runStage = useGame((s) => s.run.stage)
+  const runCleared = useGame((s) => s.run.wallsBroken >= WALLS_PER_STAGE)
   const padClaimed = useGame((s) => s.run.padClaimed)
   const padGeo = useMemo(() => {
     const g = createWorldBoxGeometry(PAD_SIZE.w, 0.3, PAD_SIZE.d, 2)
     return g
   }, [])
+  const gateGeo = useMemo(() => new PlaneGeometry(GATE_POST_X * 2 - 1, GATE_HEIGHT), [])
   const padMat = useMemo(() => new MeshBasicMaterial({ toneMapped: false }), [])
+  const gateMat = useMemo(
+    // forceSinglePass: three.js would otherwise draw transparent DoubleSide twice a
+    // frame by flipping material.side.
+    () => new MeshBasicMaterial({ color: '#7fe8ff', transparent: true, opacity: 0.22, depthWrite: false, side: DoubleSide, forceSinglePass: true }),
+    [],
+  )
   useEffect(
     () => () => {
       padGeo.dispose()
+      gateGeo.dispose()
       padMat.dispose()
+      gateMat.dispose()
     },
-    [padGeo, padMat],
+    [padGeo, gateGeo, padMat, gateMat],
   )
 
   // Layout effect: positions are set before the first frame (identity = the lobby gate).
   useLayoutEffect(() => {
     const pads = padRef.current
-    if (!pads) return
+    const gates = gateRef.current
+    if (!pads || !gates) return
     for (let i = 0; i <= MAX_WINDOW; i += 1) {
       const s = stages[i]
       if (s === undefined) {
         pads.setMatrixAt(i, HIDDEN)
+        gates.setMatrixAt(i, HIDDEN)
         continue
       }
       pads.setMatrixAt(i, placeAt(PAD_X, 0.15, padZ(s)))
-      // Neon green like the original; a claimed pad dims until the walls respawn.
+      // Neon green like the original; only the run's own stage pad is live.
       _c.set(PAD_COLOR)
-      if (s === runStage && padClaimed) _c.multiplyScalar(0.35)
+      if (s !== runStage || padClaimed) _c.multiplyScalar(0.35)
       pads.setColorAt(i, _c)
+      const open = s < runStage || (s === runStage && runCleared)
+      if (open && s < STAGE_COUNT) gates.setMatrixAt(i, HIDDEN)
+      else gates.setMatrixAt(i, placeAt(0, GATE_HEIGHT / 2, stageStartZ(s) - STAGE_LENGTH + END_WALL_DEPTH / 2))
     }
     pads.instanceMatrix.needsUpdate = true
     if (pads.instanceColor) pads.instanceColor.needsUpdate = true
+    gates.instanceMatrix.needsUpdate = true
     pads.computeBoundingSphere()
-  }, [stages, runStage, padClaimed])
+    gates.computeBoundingSphere()
+  }, [stages, runStage, runCleared, padClaimed])
 
   return (
     <>
       <instancedMesh ref={padRef} args={[padGeo, padMat, MAX_WINDOW + 1]} />
+      <instancedMesh ref={gateRef} args={[gateGeo, gateMat, MAX_WINDOW + 1]} renderOrder={3} />
     </>
   )
 }
@@ -402,7 +433,7 @@ function PadTrophies({ stages }: { stages: number[] }) {
     const t = now()
     for (let i = 0; i <= MAX_WINDOW; i += 1) {
       const s = stages[i]
-      if (s === undefined || (s === runStage && padClaimed)) {
+      if (s === undefined || s !== runStage || padClaimed) {
         mesh.setMatrixAt(i, HIDDEN)
         continue
       }
@@ -476,7 +507,7 @@ export default function StageCorridor() {
         <StageWalls key={s} stage={s} />
       ))}
       <CrackOverlay />
-      <WinPads stages={stages} />
+      <PadsAndGates stages={stages} />
       <PadTrophies stages={stages} />
       <RunLabels stages={stages} />
     </group>

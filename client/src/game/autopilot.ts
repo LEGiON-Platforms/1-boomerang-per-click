@@ -1,4 +1,4 @@
-import { C2S, inCorridor, PAD_X, padZ, wallZ, WALLS_PER_STAGE } from '@game/shared'
+import { C2S, highestUnlockedStage, PAD_X, padZ, stageAtZ, wallZ, WALLS_PER_STAGE } from '@game/shared'
 
 import { send } from '../net/connection'
 import { game, useGame } from '../state/gameStore'
@@ -7,9 +7,9 @@ import { autopilot, localPlayer } from './runtime'
 let lastTeleportAt = 0
 
 /**
- * Auto Win: plays the current stage on its own — up to each wall (auto-throw does
- * the breaking), onto the win pad, then (after the lobby respawn) on to the next
- * stage — until switched off.
+ * Auto Win: plays the best unlocked stage on its own — up to each wall (auto-throw
+ * does the breaking), onto the win pad, and back again after the lobby respawn —
+ * until switched off.
  * Called by the 10 Hz logic tick.
  */
 export function tickAutopilot(): void {
@@ -24,12 +24,14 @@ export function tickAutopilot(): void {
   const p = localPlayer.pos
   const nowMs = performance.now()
 
-  // Get into the active stage first.
-  if (!inCorridor(p.z)) {
+  // Farm the best unlocked stage: jump there whenever the run is elsewhere (after
+  // a Wins pad the run restarts at stage 1 in the lobby).
+  const best = highestUnlockedStage(d)
+  if (run.stage !== best || stageAtZ(p.z) !== run.stage) {
     autopilot.active = false
     if (nowMs - lastTeleportAt > 3000) {
       lastTeleportAt = nowMs
-      send(C2S.teleportStage, { stage: run.stage })
+      send(C2S.teleportStage, { stage: best })
     }
     return
   }

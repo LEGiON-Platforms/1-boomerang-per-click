@@ -214,7 +214,7 @@ export interface ThrowResultMsg {
   /** Training pad hit (when t = dummy). */
   pad?: number
   /** Wall hit details (when t = wall). */
-  hit?: { damage: number; broken: boolean; winsGained: number; wall: number }
+  hit?: { damage: number; broken: boolean; winsGained: number; wall: number; unlocked: number }
   run?: RunState
   /** Current wins (changes when a wall break pays out). */
   w?: number
@@ -258,8 +258,6 @@ export interface RewardMsg {
 export interface PadClaimedMsg {
   stage: number
   wins: number
-  /** Newly unlocked stage, or 0. */
-  unlocked: number
 }
 
 export interface LeaderboardEntry {

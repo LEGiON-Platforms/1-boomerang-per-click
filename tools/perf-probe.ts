@@ -149,7 +149,7 @@ async function newContext(browser: Awaited<ReturnType<typeof chromium.launch>>, 
   )
   await context.addInitScript(
     ([preset, name]) => {
-      localStorage.setItem('bpc:settings', JSON.stringify({ preset, auto: false, music: false, sfx: false, hideOtherPets: false }))
+      localStorage.setItem('bpc:settings', JSON.stringify({ v: 2, preset, auto: false, music: false, sfx: false, hideOtherPets: false }))
       localStorage.setItem('bpc:name', name)
     },
     [sc.preset, `Probe${sc.preset}`],

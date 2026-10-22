@@ -15,7 +15,7 @@ import {
   padAtPosition,
   REBIRTH_STATUE,
   boomerangPadAt,
-  inCorridor,
+  stageAtZ,
   THROW,
   TRAILS_STALL,
   WALLS_PER_STAGE,
@@ -113,7 +113,7 @@ function tick(): void {
   localPlayer.speedMult = levelSpeedMult(levelForXp(g.xp))
 
   // HUD-facing derived state, written only on change.
-  const stageHere = inCorridor(p.z) ? g.run.stage : 0
+  const stageHere = stageAtZ(p.z)
   const onPad = padAtPosition(p)
   const nearInteract = findInteract()
   const patch: Partial<ReturnType<typeof game>> = {}

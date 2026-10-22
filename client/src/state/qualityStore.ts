@@ -22,7 +22,8 @@ export interface QualitySettings {
   fogNear: number
   /** Max size of procedural textures (px). */
   textureSize: number
-  /** Sign atlas resolution: texture pixels per world unit. */
+  /** Sign text resolution: texture pixels per world unit (signs are split over as many
+   * textureSize² pages as they need, so this stays sharp even on LOW). */
   signPpu: number
   /** Name tags further than this are hidden. */
   nameTagDistance: number
@@ -51,7 +52,7 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     viewDistance: 140,
     fogNear: 50,
     textureSize: 256,
-    signPpu: 16,
+    signPpu: 44,
     nameTagDistance: 25,
     remotePets: false,
     remoteAvatars: 3,
@@ -69,7 +70,7 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     viewDistance: 260,
     fogNear: 90,
     textureSize: 512,
-    signPpu: 28,
+    signPpu: 52,
     nameTagDistance: 45,
     remotePets: true,
     remoteAvatars: 5,
@@ -87,7 +88,7 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     viewDistance: 420,
     fogNear: 120,
     textureSize: 512,
-    signPpu: 32,
+    signPpu: 60,
     nameTagDistance: 60,
     remotePets: true,
     remoteAvatars: 7,
@@ -110,8 +111,11 @@ export function detectPreset(): Preset {
 }
 
 const STORAGE_KEY = 'bpc:settings'
+/** Bumped when the defaults change: older saved presets are reset to the default. */
+const SETTINGS_VERSION = 2
 
 interface Persisted {
+  v: number
   preset: Preset
   auto: boolean
   music: boolean
@@ -135,7 +139,7 @@ function save(p: Persisted): void {
   }
 }
 
-interface QualityState extends Persisted {
+interface QualityState extends Omit<Persisted, 'v'> {
   settings: QualitySettings
   /** r3f-perf overlay (dev builds only). */
   showPerf: boolean
@@ -149,14 +153,17 @@ interface QualityState extends Persisted {
   setShowPerf: (on: boolean) => void
 }
 
+// Graphics start on LOW (players can raise it, or pick Auto, in Settings). Saves from
+// before LOW became the default don't carry their preset over.
 const initial = load()
-const initialAuto = initial.auto ?? true
-const initialPreset: Preset = initialAuto ? detectPreset() : (initial.preset ?? detectPreset())
+const fresh = initial.v !== SETTINGS_VERSION
+const initialAuto = fresh ? false : (initial.auto ?? false)
+const initialPreset: Preset = fresh ? 'LOW' : initialAuto ? detectPreset() : (initial.preset ?? 'LOW')
 
 export const useQuality = create<QualityState>((set, get) => {
   const persist = () => {
     const s = get()
-    save({ preset: s.preset, auto: s.auto, music: s.music, sfx: s.sfx, hideOtherPets: s.hideOtherPets })
+    save({ v: SETTINGS_VERSION, preset: s.preset, auto: s.auto, music: s.music, sfx: s.sfx, hideOtherPets: s.hideOtherPets })
   }
   return {
     preset: initialPreset,

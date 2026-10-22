@@ -227,6 +227,30 @@ if (stepsArg === 'display') {
   await shot(page, '27-display-close')
 }
 
+if (stepsArg === 'line') {
+  // Stage 1's walls, then straight on through its open gate into stage 2.
+  type G = { getState(): { run: { wallsBroken: number; stage: number } } }
+  type Rt = { localPlayer: { pos: { x: number; z: number } } }
+  const run = () => page.evaluate(() => (window as unknown as { __bpcGame: G }).__bpcGame.getState().run)
+  const pos = () => page.evaluate(() => ({ ...(window as unknown as { __bpcRuntime: Rt }).__bpcRuntime.localPlayer.pos }))
+  await page.keyboard.press('Escape')
+  for (let i = 0; i < 60 && (await run()).wallsBroken < 10; i += 1) {
+    await clicks(page, 3, 110)
+    await hold(page, 'w', 350)
+  }
+  await page.keyboard.down('Shift')
+  for (let i = 0; i < 40 && (await pos()).z > -70; i += 1) await hold(page, 'w', 250)
+  await page.keyboard.up('Shift')
+  await sleep(500)
+  await shot(page, '37-gate-open')
+  await page.keyboard.down('Shift')
+  for (let i = 0; i < 40 && (await pos()).z > -90; i += 1) await hold(page, 'w', 250)
+  await page.keyboard.up('Shift')
+  await sleep(800)
+  console.log('after the gate:', JSON.stringify(await run()), JSON.stringify(await pos()))
+  await shot(page, '38-stage-2')
+}
+
 if (stepsArg === 'prompt') {
   // Walk up to an egg so the "E" interact prompt shows.
   await page.keyboard.press('Escape')
