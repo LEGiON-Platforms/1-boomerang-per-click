@@ -4,6 +4,7 @@ import { HudOffers, HudTopRight } from './hud/HudRight'
 import { HudTop } from './hud/HudTop'
 import { HudTopLeft } from './hud/HudTopLeft'
 import { EggReveal } from './overlays/EggReveal'
+import { OfflinePopup, RewardPopup, TutorialRoll } from './overlays/Popups'
 import { StageClear } from './overlays/StageClear'
 import { PanelHost } from './PanelHost'
 import { ConfirmDialog, Toasts } from './Toasts'
@@ -22,6 +23,9 @@ export function Hud() {
       <Toasts />
       <StageClear />
       <PanelHost />
+      <RewardPopup />
+      <OfflinePopup />
+      <TutorialRoll />
       <EggReveal />
       <ConfirmDialog />
     </div>

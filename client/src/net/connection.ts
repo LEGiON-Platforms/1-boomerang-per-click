@@ -69,6 +69,7 @@ if (import.meta.env.DEV) {
   const w = window as unknown as { __bpcTeleport: (s: number) => void; __bpcSend: (t: string, p?: unknown) => void }
   w.__bpcTeleport = (stage) => send(C2S.teleportStage, { stage })
   w.__bpcSend = (type, payload) => send(type, payload)
+  ;(window as unknown as { __bpcUI: typeof useUI }).__bpcUI = useUI
 }
 
 /** Sends a message to the game room (dropped while disconnected). */
@@ -174,6 +175,7 @@ function bindRoom(r: Room): void {
   r.onMessage(S2C.levelUp, (m: { level: number }) => {
     ui().toast(`Level ${m.level}!`, 'success')
     playSfx('levelup')
+    confetti(localPlayer.pos.x, 2.5, localPlayer.pos.z, 30)
   })
   r.onMessage(S2C.tutorialReward, (m: TutorialRewardMsg) => useUI.getState().set({ tutorialRoll: m.index }))
   r.onMessage(S2C.purchase, (m: PurchaseMsg) => {

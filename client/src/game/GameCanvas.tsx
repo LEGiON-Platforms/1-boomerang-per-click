@@ -13,6 +13,7 @@ import { Lighting } from './Lighting'
 import { Lobby } from './lobby/Lobby'
 import { LuckyBlock } from './LuckyBlock'
 import { Pets } from './pets/Pets'
+import { Pumpkins } from './Pumpkins'
 import { LocalPlayer } from './player/LocalPlayer'
 import { RemotePlayers } from './player/RemotePlayers'
 import { FOG, SKY } from './sceneStyle'
@@ -120,6 +121,7 @@ export function GameCanvas({ onAvatarReady, onFirstFrame, children }: Props) {
         <RemotePlayers />
         <Pets />
         <LuckyBlock />
+        <Pumpkins />
         <BoomerangInstances />
         <TrailRibbons />
         <ParticleSystem />

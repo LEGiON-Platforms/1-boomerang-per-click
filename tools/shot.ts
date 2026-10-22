@@ -149,6 +149,31 @@ if (stepsArg === 'pets' || stepsArg === 'all') {
   await page.keyboard.press('Escape')
 }
 
+if (stepsArg === 'retention' || stepsArg === 'all') {
+  await page.keyboard.press('Escape')
+  const openPanel = (p: string) =>
+    page.evaluate((panel) => {
+      ;(window as unknown as { __bpcUI: { getState(): { openPanel(p: string): void } } }).__bpcUI.getState().openPanel(panel)
+    }, p)
+  for (const [panel, file] of [
+    ['daily', '13-daily'],
+    ['gifts', '14-gifts'],
+    ['quests', '15-quests'],
+    ['friends', '16-friends'],
+  ] as const) {
+    await openPanel(panel)
+    await sleep(600)
+    await shot(page, file)
+    await page.keyboard.press('Escape')
+    await sleep(250)
+  }
+  await page.evaluate(() => {
+    ;(window as unknown as { __bpcUI: { getState(): { set(p: object): void } } }).__bpcUI.getState().set({ tutorialRoll: 3 })
+  })
+  await sleep(4200)
+  await shot(page, '17-tutorial-roll')
+}
+
 const info = await page.evaluate(() => window.__bpcRenderInfo?.() ?? null)
 console.log('render info', JSON.stringify(info))
 console.log(errors.length ? `console errors/warnings:\n${errors.slice(0, 30).join('\n')}` : 'no console errors')

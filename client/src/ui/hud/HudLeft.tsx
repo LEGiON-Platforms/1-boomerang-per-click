@@ -78,6 +78,7 @@ function AutoWinButton() {
 export function HudLeft() {
   const rebirths = useGame((s) => s.data?.rebirths ?? 0)
   const pumpkins = useGame((s) => s.data?.pumpkins ?? 0)
+  const gems = useGame((s) => s.data?.gems ?? 0)
   const wins = useGame((s) => s.wins)
   const pct = Math.min(100, Math.floor((wins / rebirthCost(rebirths)) * 100))
 
@@ -87,6 +88,7 @@ export function HudLeft() {
         <CurrencyRow icon={<RebirthIcon size={60} />} value={rebirths} />
         <CurrencyRow icon={<PumpkinIcon size={56} />} value={pumpkins} />
         <CurrencyRow icon={<TrophyIcon size={56} />} value={wins} />
+        <CurrencyRow icon={<GemIcon size={50} />} value={gems} />
       </div>
       <div className="mt-4 grid w-[270px] grid-cols-2 gap-3">
         <MenuBtn panel="trails" label="Trails" color="bg-cyan" icon={<TrailsIcon size={66} />} />
