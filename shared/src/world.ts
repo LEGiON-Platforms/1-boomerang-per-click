@@ -77,9 +77,15 @@ const box = (c: Vec2, hx: number, hz: number): Box => ({
   maxZ: c.z + hz,
 })
 
+/** Raised deck the training dummies stand on (west side). */
+export const TRAINING_DECK: Box = { minX: LOBBY.minX, maxX: -35, minZ: 3, maxZ: 55 }
+/** Stepped display behind the boomerang pedestals (east side). */
+export const BOOMERANG_STEPS: Box = { minX: 34, maxX: LOBBY.maxX, minZ: 5, maxZ: 50 }
+
 /** Solid lobby props the player collides with. */
 export const LOBBY_OBSTACLES: readonly Box[] = [
-  ...TRAINING_PAD_SPOTS.map((s) => box(s.dummy, 0.9, 0.9)),
+  TRAINING_DECK,
+  BOOMERANG_STEPS,
   ...PEDESTAL_SPOTS.map((p) => box(p, 1.1, 1.1)),
   ...EGG_SPOTS.map((e) => box(e, 1.5, 1.5)),
   box(TRAILS_STALL, 3.2, 1.6),

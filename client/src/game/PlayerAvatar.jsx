@@ -53,7 +53,7 @@ function fallbackMotion(delta) {
  *   rescaled rather than trusted at native size.
  */
 export const PlayerAvatar = forwardRef(function PlayerAvatar(
-  { onReady, targetHeight = 1.8, motionRef, ...props },
+  { onReady, onRig, targetHeight = 1.8, motionRef, ...props },
   ref,
 ) {
   const { avatar: equipped, proportions, game } = useBloxity()
@@ -212,6 +212,11 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
   useEffect(() => {
     if (assembled) onReady?.()
   }, [assembled, onReady])
+
+  // Lets the owner attach things that follow bones (the held boomerang).
+  useEffect(() => {
+    onRig?.(rig)
+  }, [rig, onRig])
 
   return (
     <group ref={ref} {...props}>

@@ -334,13 +334,34 @@ const sway = (rig, name, angle) => rotateBone(rig, name, 'axisZ', angle)
  * Poses the rig for the current motion state.
  *
  * @param {object} rig from `collectRig`
- * @param {{ time: number, speed: number, grounded: boolean, maxSpeed: number }} motion
+ * @param {{ time: number, speed: number, grounded: boolean, maxSpeed: number,
+ *           throwPhase?: number }} motion
  *   `speed` is horizontal speed in world units/sec; `maxSpeed` is what counts as a
  *   full-amplitude run, so the cycle scales smoothly from a walk to a sprint.
+ *   `throwPhase` runs 0..1 through a boomerang throw (negative = not throwing).
  */
 export function animateRig(rig, motion) {
   if (!rig?.skeleton || !motion) return
+  poseBase(rig, motion)
+  poseThrow(rig, motion.throwPhase ?? -1)
+}
 
+/**
+ * Overhand throw layered on top of whatever the legs are doing: the right arm
+ * winds up overhead, whips forward, then settles back.
+ */
+function poseThrow(rig, phase) {
+  if (!(phase >= 0 && phase < 1)) return
+  let arm
+  if (phase < 0.3) arm = -2.7 * (phase / 0.3)
+  else if (phase < 0.55) arm = -2.7 + 2.3 * ((phase - 0.3) / 0.25)
+  else arm = -0.4 * (1 - (phase - 0.55) / 0.45)
+  swing(rig, 'ArmR1', arm)
+  swing(rig, 'ArmR2', phase < 0.3 ? -0.5 * (phase / 0.3) : -0.5 * Math.max(0, 1 - (phase - 0.3) / 0.4))
+  swing(rig, 'Spine1', phase < 0.3 ? 0.1 * (phase / 0.3) : -0.12 * Math.sin(((phase - 0.3) / 0.7) * Math.PI))
+}
+
+function poseBase(rig, motion) {
   const { time = 0, speed = 0, grounded = true, maxSpeed = 6 } = motion
   const ratio = Math.min(speed / Math.max(maxSpeed, 0.001), 1)
 
