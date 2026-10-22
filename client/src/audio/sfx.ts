@@ -175,6 +175,62 @@ export function playSfx(name: Sfx): void {
 }
 
 /* ---------------------------------------------------------------------------
+ * Whoosh: a spinning boomerang cutting the air.
+ * ------------------------------------------------------------------------- */
+
+const WHOOSH_TIME = 0.6
+/** At most one new whoosh per WHOOSH_GAP and WHOOSH_VOICES at once, so spam-clicking can't stack voices. */
+const WHOOSH_GAP = 0.09
+const WHOOSH_VOICES = 3
+let whooshVoices = 0
+let lastWhoosh = -1
+const endWhoosh = () => {
+  whooshVoices -= 1
+}
+
+/**
+ * Band-passed noise pulsed at the spin rate ("whup-whup-whup"), its pitch rising
+ * on the way out and falling on the way back. `volume` 0..1 (other players' throws
+ * are quieter).
+ */
+export function playWhoosh(volume = 1): void {
+  if (!ctx || !sfxBus || !noiseBuffer || volume <= 0.02 || !useQuality.getState().sfx) return
+  const t = ctx.currentTime
+  if (t - lastWhoosh < WHOOSH_GAP || whooshVoices >= WHOOSH_VOICES) return
+  lastWhoosh = t
+  whooshVoices += 1
+  const src = ctx.createBufferSource()
+  src.buffer = noiseBuffer
+  const bq = ctx.createBiquadFilter()
+  bq.type = 'bandpass'
+  bq.Q.value = 2.2
+  bq.frequency.setValueAtTime(650, t)
+  bq.frequency.exponentialRampToValueAtTime(1900, t + WHOOSH_TIME * 0.45)
+  bq.frequency.exponentialRampToValueAtTime(750, t + WHOOSH_TIME)
+  // Spin pulses: a gain swung by a fast LFO (slowing a little as it comes back).
+  const spin = ctx.createGain()
+  spin.gain.value = 0.55
+  const lfo = ctx.createOscillator()
+  lfo.frequency.setValueAtTime(17, t)
+  lfo.frequency.linearRampToValueAtTime(11, t + WHOOSH_TIME)
+  const depth = ctx.createGain()
+  depth.gain.value = 0.45
+  lfo.connect(depth).connect(spin.gain)
+  const env = ctx.createGain()
+  const peak = 0.4 * volume
+  env.gain.setValueAtTime(0.0001, t)
+  env.gain.exponentialRampToValueAtTime(peak, t + 0.06)
+  env.gain.setValueAtTime(peak, t + WHOOSH_TIME * 0.55)
+  env.gain.exponentialRampToValueAtTime(0.0001, t + WHOOSH_TIME)
+  src.connect(bq).connect(spin).connect(env).connect(sfxBus)
+  src.onended = endWhoosh
+  src.start(t, Math.random() * 0.35)
+  src.stop(t + WHOOSH_TIME + 0.02)
+  lfo.start(t)
+  lfo.stop(t + WHOOSH_TIME + 0.02)
+}
+
+/* ---------------------------------------------------------------------------
  * Music: a 4-chord loop with bass and a soft arpeggio, scheduled just ahead.
  * ------------------------------------------------------------------------- */
 

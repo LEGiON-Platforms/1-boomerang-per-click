@@ -37,6 +37,10 @@ export interface RemotePlayer {
   handAt: number
   /** Clock time (s) of this player's last throw, for the animation. */
   throwAt: number
+  /** Clock time (s) they reached out to catch a returning boomerang. */
+  catchAt: number
+  /** Their boomerangs in flight (counted each frame by BoomerangInstances). */
+  out: number
   /** Interpolated pose, written by RemotePlayers each frame. */
   px: number
   py: number
@@ -92,6 +96,8 @@ export function createRemote(sessionId: string, name: string, pid: string, x: nu
     hand: new Vector3(),
     handAt: -10,
     throwAt: -10,
+    catchAt: -10,
+    out: 0,
     px: x,
     py: y,
     pz: z,

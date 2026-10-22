@@ -12,7 +12,7 @@ import {
   rebirthLevel,
   STAGE_COUNT,
 } from '../config/economy'
-import { TRAINING_PADS, isPadUnlocked } from '../config/pads'
+import { isPadOwned, TRAINING_PADS } from '../config/pads'
 import { type EggDef, petBonus, petSlots } from '../config/pets'
 import { BOOSTS, type BoostId, FRIEND_BOOST, STARTER_PACK_WINDOW_MINUTES } from '../config/retention'
 import { TRAILS } from '../config/trails'
@@ -88,7 +88,7 @@ export function boostMultiplier(d: PlayerData, ctx: GainContext): number {
 }
 
 export function trainingPadMult(d: PlayerData, padId: number): number {
-  if (padId < 0 || !isPadUnlocked(padId, d.rebirths)) return 1
+  if (!isPadOwned(padId, d.trainingPads)) return 1
   return TRAINING_PADS[padId].mult
 }
 

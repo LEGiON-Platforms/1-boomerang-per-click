@@ -251,6 +251,24 @@ if (stepsArg === 'line') {
   await shot(page, '38-stage-2')
 }
 
+if (stepsArg === 'shatter') {
+  // Throw at stage 1's first wall until it breaks, then catch the chunks mid-flight.
+  type G = { getState(): { run: { wallsBroken: number } } }
+  const broken = () => page.evaluate(() => (window as unknown as { __bpcGame: G }).__bpcGame.getState().run.wallsBroken)
+  await page.keyboard.press('Escape')
+  await page.evaluate(() => {
+    ;(window as unknown as { __bpcTeleport?: (s: number) => void }).__bpcTeleport?.(1)
+  })
+  await sleep(1200)
+  await hold(page, 'w', 900)
+  const start = await broken()
+  for (let i = 0; i < 80 && (await broken()) === start; i += 1) await clicks(page, 1, 100)
+  for (const [ms, name] of [[60, 'a'], [200, 'b'], [300, 'c'], [450, 'd'], [600, 'e']] as const) {
+    await sleep(ms)
+    await shot(page, `39-shatter-${name}`)
+  }
+}
+
 if (stepsArg === 'prompt') {
   // Walk up to an egg so the "E" interact prompt shows.
   await page.keyboard.press('Escape')
@@ -282,6 +300,8 @@ if (stepsArg === 'pose') {
       [yawOffset, phase],
     )
   await page.keyboard.press('Escape')
+  // The bottom HUD would cover the legs.
+  await page.addStyleTag({ content: '.hud-bc { display: none !important; }' })
   for (const [view, off] of [['front', 0], ['side', Math.PI / 2], ['back', Math.PI]] as const) {
     for (const phase of [null, 0.1, 0.2, 0.32, 0.45, 0.7]) {
       await set(off, phase)
@@ -319,6 +339,49 @@ if (stepsArg === 'hold') {
   await sleep(1200)
   await clicks(page, 6, 90)
   await shot(page, '31-flight')
+}
+
+if (stepsArg === 'banner') {
+  // The win-pad "Stage Clear" banner (shown directly; the payout itself is untouched).
+  await page.keyboard.press('Escape')
+  await page.evaluate(() => {
+    ;(window as unknown as { __bpcUI: { getState(): { set(p: object): void } } }).__bpcUI.getState().set({ stageClear: { stage: 7, wins: 1250 } })
+  })
+  await sleep(600)
+  await shot(page, '45-stage-clear-banner')
+}
+
+if (stepsArg === 'walk') {
+  // Walking in a curve, then stopping: the glowing path behind on the floor.
+  await page.keyboard.press('Escape')
+  await page.keyboard.down('w')
+  await hold(page, 'd', 900)
+  await hold(page, 'a', 900)
+  await page.keyboard.up('w')
+  await shot(page, '46-walk-path')
+  await sleep(700)
+  await shot(page, '46-walk-path-fading')
+}
+
+if (stepsArg === 'catch') {
+  // One throw from the side: the hand empties as it flies, then reaches out to catch it.
+  await page.keyboard.press('Escape')
+  await page.addStyleTag({ content: '.hud-bc { display: none !important; }' })
+  await page.evaluate(() => {
+    const rt = (window as unknown as { __bpcRuntime: { cameraState: { yaw: number; pitch: number; distance: number }; localPlayer: { rotY: number } } })
+      .__bpcRuntime
+    rt.cameraState.yaw = rt.localPlayer.rotY - Math.PI / 2 + 0.3
+    rt.cameraState.pitch = 0.15
+    rt.cameraState.distance = 10
+  })
+  await sleep(800)
+  await shot(page, '44-catch-0-idle')
+  await page.mouse.click(800, 300)
+  const t0 = Date.now()
+  for (const [at, name] of [[60, '1-windup'], [300, '2-flying'], [560, '3-return'], [700, '4-catch'], [900, '5-caught']] as const) {
+    await sleep(Math.max(0, at - (Date.now() - t0)))
+    await shot(page, `44-catch-${name}`)
+  }
 }
 
 if (stepsArg === 'boomerangs') {

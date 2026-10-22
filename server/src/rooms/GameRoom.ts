@@ -1,4 +1,4 @@
-import { type Client, Room } from '@colyseus/core'
+import { type Client, CloseCode, Room } from '@colyseus/core'
 import {
   addFriend,
   addPlaytime,
@@ -8,6 +8,7 @@ import {
   bestBoomerangId,
   buyPerk,
   buyNextBoomerang,
+  buyTrainingPad,
   buyTrail,
   C2S,
   checkBadges,
@@ -36,7 +37,7 @@ import {
   hitWall,
   INTERACT_RADIUS,
   INTERACT_TOLERANCE,
-  isPadUnlocked,
+  isPadOwned,
   isStageUnlocked,
   type JoinOptions,
   LUCKY_BLOCK,
@@ -165,9 +166,11 @@ export class GameRoom extends Room<{ state: GameState }> {
   }
 
   onDrop(client: Client, code?: number): void {
-    // Replaced by a newer session for the same account: free the seat now
-    // (without allowReconnection, Colyseus goes straight on to onLeave).
-    if (code === CLOSE_DUPLICATE) return
+    // Replaced by a newer session for the same account, or this server is shutting
+    // down (a deploy or scale-down: the client rejoins through the matchmaker, on
+    // a fresh server): free the seat and save now — without allowReconnection,
+    // Colyseus goes straight on to onLeave.
+    if (code === CLOSE_DUPLICATE || code === CloseCode.SERVER_SHUTDOWN) return
     const s = this.sessions.get(client.sessionId)
     if (s) s.state.anim = ANIM.idle
     this.allowReconnection(client, RECONNECT_SECONDS)
@@ -376,7 +379,7 @@ export class GameRoom extends Room<{ state: GameState }> {
       const pad = Math.floor(Number(m?.pad))
       const spot = TRAINING_PAD_SPOTS[pad]
       if (!spot) return this.error(s, 'bad_request')
-      if (!isPadUnlocked(pad, s.data.rebirths)) return this.error(s, 'not_owned')
+      if (!isPadOwned(pad, s.data.trainingPads)) return this.error(s, 'not_owned')
       // Face the dummy, which stands to the -X side of its pad.
       this.teleport(s, spot.pad.x, spot.pad.z, -Math.PI / 2)
     })
@@ -385,6 +388,13 @@ export class GameRoom extends Room<{ state: GameState }> {
       const r = buyNextBoomerang(s.data)
       if (!r.ok) return this.error(s, r.error)
       s.client.send(S2C.purchase, { kind: 'boomerang', id: r.id })
+      this.changed(s)
+    })
+
+    this.on(C2S.buyPad, (s) => {
+      const r = buyTrainingPad(s.data)
+      if (!r.ok) return this.error(s, r.error)
+      s.client.send(S2C.purchase, { kind: 'pad', id: r.id })
       this.changed(s)
     })
 
@@ -583,7 +593,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     if (!s.throws.take(now)) return
     const d = s.data
     let padId = padAtPosition(s.pos)
-    if (padId >= 0 && !isPadUnlocked(padId, d.rebirths)) padId = -1
+    if (!isPadOwned(padId, d.trainingPads)) padId = -1
 
     const gain = applyThrowGain(d, { padId, friendsInRoom: this.friendsInRoom(s), now })
     const result: ThrowResultMsg = { s: Number(m?.s) || 0, g: gain, p: d.power, t: TARGET.none }

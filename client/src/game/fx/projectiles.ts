@@ -3,13 +3,19 @@ import { Vector3 } from 'three'
 
 import { playSfx } from '../../audio/sfx'
 import { type BoomerangLook, boomerangLook } from '../boomerangShapes'
-import { now, triggerShake } from '../runtime'
+import { remotePlayers } from '../../net/remote'
+import { CATCH_ANIM_S, CATCH_AT, catchStartAt, heldBoomerang, localPlayer, now, triggerShake, wallFx } from '../runtime'
 import { burst } from './particles'
+import { whooshForThrow } from './whoosh'
 
 /**
  * Pooled thrown boomerangs. A throw arcs out to its target and back to the
  * thrower's hand in THROW.flightTime. If the server's result arrives while the
  * boomerang is still outbound, its hit effect plays at the moment of impact.
+ *
+ * A boomerang IS the one from the thrower's hand: `t` starts below 0 while it is
+ * still held during the wind-up, it leaves from wherever the hand is at release,
+ * homes back to the hand on the return leg, and the thrower reaches out to catch it.
  */
 export const PROJECTILE_CAPACITY = 40
 export const FLIGHT_TIME = 0.6
@@ -63,6 +69,8 @@ export function launch(
   boomerang: number,
   vip: boolean,
   trail: number,
+  /** Seconds it stays in the hand before release (the rest of the wind-up). */
+  delay = 0,
 ): void {
   // Reuse the oldest slot if every one is in flight.
   const p = projectiles[cursor]
@@ -71,7 +79,7 @@ export function launch(
   p.id = nextId++
   p.owner = owner
   p.seq = seq
-  p.t = 0
+  p.t = -delay / FLIGHT_TIME
   p.from.set(from.x, from.y, from.z)
   p.to.set(to.x, to.y, to.z)
   p.look = boomerangLook(boomerang, vip)
@@ -91,7 +99,10 @@ function playImpact(kind: number, x: number, y: number, z: number, color: string
   }
   if (kind === IMPACT.wall) {
     if (broken) {
-      burst(x, y, z, color, 36, 8, 4, 0.5)
+      // The wall itself shatters into chunks (corridor/wallShatter.ts); this is dust on top.
+      wallFx.breakAt = now()
+      wallFx.breakX = x
+      burst(x, y, z, color, 16, 7, 3, 0.35)
       triggerShake(0.55)
       playSfx('break')
     } else {
@@ -129,16 +140,44 @@ export function resolveImpact(
   playImpact(kind, at.x, at.y, at.z, color, broken)
 }
 
+/** Flight left (normalised) when the thrower starts reaching out to catch it. */
+const CATCH_LEAD = (CATCH_ANIM_S * CATCH_AT) / FLIGHT_TIME
+
+/** Keeps the path's start on the thrower's hand (before release and on the way back). */
+function homeToHand(p: Projectile): void {
+  if (p.owner === 'local') {
+    p.from.copy(heldBoomerang.position)
+    return
+  }
+  const r = remotePlayers.get(p.owner)
+  if (r?.full && now() - r.handAt < 0.2) p.from.copy(r.hand)
+}
+
+function startCatch(owner: string): void {
+  const t = now()
+  if (owner === 'local') {
+    localPlayer.catchAt = catchStartAt(localPlayer.catchAt, t)
+    return
+  }
+  const r = remotePlayers.get(owner)
+  if (r) r.catchAt = catchStartAt(r.catchAt, t)
+}
+
 /** Advances every live boomerang; called once per frame by the renderer. */
 export function stepProjectiles(dt: number): void {
   for (let i = 0; i < projectiles.length; i += 1) {
     const p = projectiles[i]
     if (!p.active) continue
+    const before = p.t
     p.t += dt / FLIGHT_TIME
+    if (p.t <= 0 || p.t > 0.5) homeToHand(p)
+    // Released: it cuts through the air.
+    if (before <= 0 && p.t > 0) whooshForThrow(p.owner, p.from.x, p.from.z)
     if (p.t >= 0.5 && !p.impactPlayed) {
       p.impactPlayed = true
       if (p.impact !== IMPACT.none) playImpact(p.impact, p.to.x, p.to.y, p.to.z, p.impactColor, p.impactBroken)
     }
+    if (before < 1 - CATCH_LEAD && p.t >= 1 - CATCH_LEAD) startCatch(p.owner)
     if (p.t >= 1) p.active = false
   }
 }

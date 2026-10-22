@@ -17,7 +17,9 @@ import { game } from '../../state/gameStore'
 import { PropBuilder } from '../builder'
 import {
   autopilot,
+  CATCH_ANIM_S,
   cameraState,
+  catchFlatness,
   devPose,
   heldBoomerang,
   input,
@@ -51,7 +53,7 @@ const lerpAngle = (a: number, b: number, t: number) => {
 export function LocalPlayer({ onAvatarReady }: { onAvatarReady?: () => void }) {
   const rootRef = useRef<Group>(null)
   const visualRef = useRef<Group>(null)
-  const motionRef = useRef({ time: 0, speed: 0, grounded: true, maxSpeed: MOVE_SPEED, velY: 0, throwPhase: -1 })
+  const motionRef = useRef({ time: 0, speed: 0, grounded: true, maxSpeed: MOVE_SPEED, velY: 0, throwPhase: -1, catchPhase: -1 })
   const handRef = useRef<Bone | null>(null)
 
   // The held boomerang is drawn by BoomerangInstances; this only poses it.
@@ -180,6 +182,8 @@ export function LocalPlayer({ onAvatarReady }: { onAvatarReady?: () => void }) {
     const since = t - lp.throwAt
     motion.throwPhase = since < THROW_ANIM_S ? since / THROW_ANIM_S : -1
     if (import.meta.env.DEV && devPose.throwPhase !== null) motion.throwPhase = devPose.throwPhase
+    const caught = t - lp.catchAt
+    motion.catchPhase = caught < CATCH_ANIM_S ? caught / CATCH_ANIM_S : -1
 
     const held = heldBoomerang
     const hand = handRef.current
@@ -190,7 +194,7 @@ export function LocalPlayer({ onAvatarReady }: { onAvatarReady?: () => void }) {
       held.position.set(lp.pos.x - Math.cos(lp.rotY) * 0.6, lp.pos.y + 1.4, lp.pos.z + Math.sin(lp.rotY) * 0.6)
     }
     held.yaw = lp.rotY
-    held.flat = throwFlatness(motion.throwPhase)
+    held.flat = Math.max(throwFlatness(motion.throwPhase), catchFlatness(motion.catchPhase))
     held.visible = state.camera.position.distanceToSquared(lp.pos) > 1
   })
 

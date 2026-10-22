@@ -20,11 +20,20 @@ export function StageClear() {
   }, [clear])
 
   if (!clear) return null
+  const title = `Stage ${clear.stage} Clear!`
+  const wins = `+${formatNumber(clear.wins)} Wins`
   return (
     <div className="stage-clear">
-      <div className="title txt-outline">Stage {clear.stage} Clear!</div>
-      <div className="txt-outline flex items-center gap-3 text-[48px]" style={{ color: '#5dff7a' }}>
-        <TrophyIcon size={52} />+{formatNumber(clear.wins)} Wins
+      <div className="ribbon">
+        <span className="title grad-text" data-text={title}>
+          {title}
+        </span>
+      </div>
+      <div className="wins">
+        <TrophyIcon size={56} />
+        <span className="grad-text" data-text={wins}>
+          {wins}
+        </span>
       </div>
       {clear.stage >= STAGE_COUNT && (
         <div className="txt-outline text-[22px]">You beat the final stage! Rebirth to go again, stronger.</div>

@@ -20,11 +20,13 @@ import {
   type SelfMsg,
   type TeleportMsg,
   TRAILS,
+  TRAINING_PADS,
   BOOMERANGS,
   type ThrowResultMsg,
   type ToastMsg,
   type TutorialRewardMsg,
   type WelcomeMsg,
+  levelSpeedMult,
 } from '@game/shared'
 
 import { playSfx } from '../audio/sfx'
@@ -34,18 +36,75 @@ import { cameraState, devPose, localPlayer, pending, playerScreenPoint } from '.
 import { game, type RoomPlayerInfo, useGame } from '../state/gameStore'
 import { ui, useUI } from '../state/uiStore'
 import { flyTrophies } from '../ui/floating'
+import { waitForSDK } from '../bloxity/sdk'
 import { getBloxityState, useBloxityStore } from '../bloxity/store'
 import { getPlayerId } from './identity'
 import { addRemote, clearRemotes, createRemote, pushSnapshot, removeRemote } from './remote'
 
 /** Mirrors the server's CLOSE_DUPLICATE. */
 const CLOSE_DUPLICATE = 4100
+/** Colyseus CloseCode.SERVER_SHUTDOWN: the server is being replaced (a deploy). */
+const CLOSE_SERVER_SHUTDOWN = 4001
 const RETRY_MS = 3000
+
+/**
+ * Hosted on Bloxity Legion: players join through the matchmaker, which picks (or
+ * boots) a server with a free seat. Unset in local dev, where the client talks to
+ * the game server directly (serverUrl()).
+ */
+const LEGION_GAME_ID = import.meta.env.VITE_LEGION_GAME_ID as string | undefined
+/** Optional matchmaker version, e.g. "preview" to reach dev from a custom domain. */
+const LEGION_VERSION = import.meta.env.VITE_LEGION_VERSION as string | undefined
+/** Matchmaker retries back off up to this, and give up after GIVE_UP_MS. */
+const MAX_BACKOFF_MS = 8000
+const GIVE_UP_MS = 60_000
+
+interface LegionNet {
+  net: { resolveEndpoint(gameId: string, options?: { version?: string }): Promise<{ endpoint: string }> }
+}
 
 let client: Client | null = null
 let room: Room | null = null
 let joinName = ''
 let retryTimer: number | null = null
+/** When the current run of failed joins started (0 = the last join worked), and its length. */
+let failingSince = 0
+let failures = 0
+
+/**
+ * A Colyseus client for the next join. Through the matchmaker every resolve pins a
+ * new endpoint to one server, so each one gets a fresh Client; direct connections
+ * reuse theirs.
+ */
+async function nextClient(): Promise<Client> {
+  if (!LEGION_GAME_ID) return client ?? new Client(serverUrl())
+  const sdk = (await waitForSDK({ timeoutMs: 20_000 })) as LegionNet
+  const { endpoint } = await sdk.net.resolveEndpoint(LEGION_GAME_ID, LEGION_VERSION ? { version: LEGION_VERSION } : undefined)
+  return new Client(endpoint)
+}
+
+/**
+ * Schedules another join attempt. After a failed join through the matchmaker it
+ * backs off (1, 2, 4, 8 s …) and gives up after a minute — a cold start can take
+ * up to ~45 s.
+ */
+function scheduleRetry(delayMs = RETRY_MS, afterFailure = true): void {
+  if (retryTimer !== null) window.clearTimeout(retryTimer)
+  if (LEGION_GAME_ID && afterFailure) {
+    const t = Date.now()
+    if (!failingSince) failingSince = t
+    if (t - failingSince > GIVE_UP_MS) {
+      retryTimer = null
+      failingSince = 0
+      failures = 0
+      useGame.getState().setStatus('error', 'Could not reach the game servers. Please reload the page.')
+      return
+    }
+    delayMs = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** failures)
+    failures += 1
+  }
+  retryTimer = window.setTimeout(() => void connect(joinName), delayMs)
+}
 
 function serverUrl(): string {
   const env = import.meta.env.VITE_SERVER_URL as string | undefined
@@ -100,21 +159,24 @@ export async function connect(name: string): Promise<void> {
   if (retryTimer !== null) window.clearTimeout(retryTimer)
   retryTimer = null
   useGame.getState().setStatus('connecting')
-  client = client ?? new Client(serverUrl())
   const options = { playerId: getPlayerId(), name }
   const roomParam = new URLSearchParams(location.search).get('room')
   try {
+    const c = await nextClient()
+    client = c
     room = roomParam
-      ? await client.joinById(roomParam, options).catch(() => client!.joinOrCreate(ROOM_NAME, options))
-      : await client.joinOrCreate(ROOM_NAME, options)
+      ? await c.joinById(roomParam, options).catch(() => c.joinOrCreate(ROOM_NAME, options))
+      : await c.joinOrCreate(ROOM_NAME, options)
   } catch (err) {
     console.warn('[net] join failed', err)
     connecting = false
     useGame.getState().setStatus('error', 'Could not reach the game server. Retrying…')
-    retryTimer = window.setTimeout(() => void connect(joinName), RETRY_MS)
+    scheduleRetry()
     return
   }
   connecting = false
+  failingSince = 0
+  failures = 0
   bindRoom(room)
 }
 
@@ -195,7 +257,7 @@ function bindRoom(r: Room): void {
   r.onMessage(S2C.luckyWinner, () => playSfx('lucky'))
   r.onMessage(S2C.offline, (m: OfflineMsg) => useUI.getState().set({ offline: m }))
   r.onMessage(S2C.levelUp, (m: { level: number }) => {
-    ui().toast(`Level ${m.level}!`, 'success')
+    ui().toast(`Level ${m.level}! Walk speed +${Math.round((levelSpeedMult(m.level) - 1) * 100)}%`, 'success')
     playSfx('levelup')
     confetti(localPlayer.pos.x, 2.5, localPlayer.pos.z, 30)
   })
@@ -203,6 +265,7 @@ function bindRoom(r: Room): void {
   r.onMessage(S2C.purchase, (m: PurchaseMsg) => {
     playSfx('buy')
     if (m.kind === 'boomerang') ui().toast(`${BOOMERANGS[m.id as number]?.name} Boomerang unlocked!`, 'success')
+    else if (m.kind === 'pad') ui().toast(`Training pad unlocked: x${TRAINING_PADS[m.id as number]?.mult} Power!`, 'success')
     else if (m.kind === 'trail') ui().toast(`${TRAILS[m.id as number]?.name} Trail unlocked!`, 'success')
     else ui().toast(`${PERK_SHOP[m.id as PerkId]?.name ?? 'Item'} unlocked!`, 'success')
   })
@@ -273,7 +336,9 @@ function bindRoom(r: Room): void {
       return
     }
     useGame.getState().setStatus('error', 'Disconnected from the server. Reconnecting…')
-    retryTimer = window.setTimeout(() => void connect(joinName), RETRY_MS)
+    // A server being replaced (deploy / scale-down) has already saved us: rejoin
+    // right away — through the matchmaker that lands on a fresh server.
+    scheduleRetry(code === CLOSE_SERVER_SHUTDOWN ? 300 : RETRY_MS, false)
   })
 }
 

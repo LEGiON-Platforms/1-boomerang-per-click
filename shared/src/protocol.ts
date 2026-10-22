@@ -102,6 +102,7 @@ export const C2S = {
   move: 'move',
   throw: 'throw',
   buyBoomerang: 'buyBoomerang',
+  buyPad: 'buyPad',
   buyTrail: 'buyTrail',
   equipTrail: 'equipTrail',
   openEgg: 'openEgg',
@@ -285,7 +286,7 @@ export interface OfflineMsg {
 }
 
 export interface PurchaseMsg {
-  kind: 'boomerang' | 'trail' | 'perk'
+  kind: 'boomerang' | 'pad' | 'trail' | 'perk'
   id: number | PerkId
 }
 

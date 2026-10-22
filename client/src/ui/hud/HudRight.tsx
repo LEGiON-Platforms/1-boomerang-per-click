@@ -14,14 +14,15 @@ export function HudTopRight() {
     <div className="hud-group hud-tr">
       <button
         type="button"
-        className={`top-icon ${open ? 'active' : ''}`}
+        className={`btn3d studs settings-btn bg-slate ${open ? 'is-open' : ''}`}
         aria-label="Settings"
         onClick={() => {
           playSfx('click')
           ui().togglePanel('settings')
         }}
       >
-        <GearIcon size={54} />
+        <GearIcon size={58} className="gear" />
+        <span className="label txt-outline">Settings</span>
         {alerts?.any && <span className="badge-alert txt-outline">!</span>}
       </button>
     </div>

@@ -2,32 +2,36 @@
 
 export interface TrainingPadDef {
   id: number
-  /** Header label: "FREE" or the rebirth requirement. */
-  label: string
-  requiredRebirths: number
+  /** Price in Wins (pad 0 is free). Pads are bought in order and kept through rebirths. */
+  cost: number
   mult: number
   /** Glow colour of the "STAND HERE" tile. */
   color: string
 }
 
 export const TRAINING_PADS: readonly TrainingPadDef[] = [
-  { id: 0, label: 'FREE', requiredRebirths: 0, mult: 1.25, color: '#ff4d4d' },
-  { id: 1, label: '1', requiredRebirths: 1, mult: 1.5, color: '#2ee66b' },
-  { id: 2, label: '2', requiredRebirths: 2, mult: 2, color: '#ffe23d' },
-  { id: 3, label: '4', requiredRebirths: 4, mult: 4, color: '#3da5ff' },
-  { id: 4, label: '8', requiredRebirths: 8, mult: 8, color: '#b04dff' },
-  { id: 5, label: '12', requiredRebirths: 12, mult: 16, color: '#ff8a1f' },
-  { id: 6, label: '25', requiredRebirths: 25, mult: 75, color: '#ffffff' },
+  { id: 0, cost: 0, mult: 1.25, color: '#ff4d4d' },
+  { id: 1, cost: 600, mult: 1.5, color: '#2ee66b' },
+  { id: 2, cost: 18_000, mult: 2, color: '#ffe23d' },
+  { id: 3, cost: 400_000, mult: 4, color: '#3da5ff' },
+  { id: 4, cost: 7_000_000, mult: 8, color: '#b04dff' },
+  { id: 5, cost: 25_000_000, mult: 16, color: '#ff8a1f' },
+  { id: 6, cost: 1_000_000_000, mult: 75, color: '#ffffff' },
 ]
 
-export function isPadUnlocked(padId: number, rebirths: number): boolean {
-  const pad = TRAINING_PADS[padId]
-  return Boolean(pad) && rebirths >= pad.requiredRebirths
+/** `padsOwned` is PlayerData.trainingPads: pads 0..padsOwned-1 are owned. */
+export function isPadOwned(padId: number, padsOwned: number): boolean {
+  return padId >= 0 && padId < Math.min(padsOwned, TRAINING_PADS.length)
 }
 
 /** Highest pad the player may stand on. */
-export function bestUnlockedPad(rebirths: number): number {
-  let best = 0
-  for (const pad of TRAINING_PADS) if (rebirths >= pad.requiredRebirths) best = pad.id
-  return best
+export function bestOwnedPad(padsOwned: number): number {
+  return Math.max(0, Math.min(padsOwned, TRAINING_PADS.length) - 1)
+}
+
+/** Pads used to unlock at these rebirth counts; older saves keep what they had. */
+const LEGACY_REBIRTH_GATES = [0, 1, 2, 4, 8, 12, 25]
+
+export function legacyPadsOwned(rebirths: number): number {
+  return LEGACY_REBIRTH_GATES.filter((r) => rebirths >= r).length
 }

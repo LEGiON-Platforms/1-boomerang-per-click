@@ -1,0 +1,17 @@
+**/node_modules
+**/dist
+**/*.log
+.git
+.github
+.env
+.env.*
+**/.env
+**/.env.*
+server/data
+# Only the client's and tools' manifests are needed (for `npm ci`).
+client/*
+!client/package.json
+tools/*
+!tools/package.json
+scripts
+README.md

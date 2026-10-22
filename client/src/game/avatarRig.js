@@ -1,6 +1,7 @@
 import { NearestFilter, Quaternion, SRGBColorSpace, Vector3 } from 'three'
 
 import { BACK_BONE, HAT_BONE, NECK_OFFSET_BONE, PART_SLOTS } from '../bloxity/avatarAssets'
+import { CATCH_AT } from './runtime'
 
 /**
  * Rig manipulation for the base `player.glb` character.
@@ -120,6 +121,12 @@ export function collectRig(root) {
       /** Local axis to rotate about for a twist (the character's vertical). */
       entry.axisY = new Vector3(0, 1, 0).applyQuaternion(relInv).normalize()
     }
+
+    // Thigh length in the character's own units, for keeping the feet down when the
+    // legs are spread (the shin is about as long).
+    const hip = rig.bones.LegL1?.bone
+    const knee = rig.bones.LegL2?.bone
+    rig.thigh = hip && knee ? hip.getWorldPosition(new Vector3()).distanceTo(knee.getWorldPosition(new Vector3())) : 0
 
     rig.hatBone = skeleton.bones.find((b) => b.name === HAT_BONE) || null
     rig.backBone = skeleton.bones.find((b) => b.name === BACK_BONE) || null
@@ -351,18 +358,33 @@ const twist = (rig, name, angle) => rotateBone(rig, name, 'axisY', angle)
  *
  * @param {object} rig from `collectRig`
  * @param {{ time: number, speed: number, grounded: boolean, maxSpeed: number,
- *           velY?: number, throwPhase?: number }} motion
+ *           velY?: number, throwPhase?: number, catchPhase?: number }} motion
  *   `speed` is horizontal speed in world units/sec; `maxSpeed` is a full-amplitude
  *   run (faster than that only quickens the stride). `velY` is vertical speed.
- *   `throwPhase` runs 0..1 through a boomerang throw (negative = not throwing).
+ *   `throwPhase` runs 0..1 through a boomerang throw, `catchPhase` through a
+ *   catch (negative = not throwing / catching).
  */
 export function animateRig(rig, motion) {
   if (!rig?.skeleton || !motion) return
-  poseBase(rig, motion)
+  const stance = poseBase(rig, motion)
+  const idle = stance === IDLE
+  // Throws and catches start from, and settle back into, the stance's own arm pose.
+  const rest = idle ? IDLE_R : CARRY
   const phase = motion.throwPhase ?? -1
-  if (phase >= 0 && phase < 1) poseThrow(rig, phase)
-  else if (motion.grounded !== false) poseArm(rig, CARRY, CARRY, 0)
+  const catchPhase = motion.catchPhase ?? -1
+  if (phase >= 0 && phase < 1) {
+    poseThrow(rig, phase, rest)
+    if (idle) poseLeftIdle(rig, motion.time, phase < 0.15 ? 1 - phase / 0.15 : phase > 0.7 ? (phase - 0.7) / 0.3 : 0)
+  } else if (stance !== AIR) {
+    if (catchPhase >= 0 && catchPhase < 1) poseCatch(rig, catchPhase, rest)
+    else poseArm(rig, rest, rest, 0)
+    if (idle) poseLeftIdle(rig, motion.time, 1)
+  }
 }
+
+const AIR = 0
+const IDLE = 1
+const MOVE = 2
 
 /*
  * The right arm always carries a boomerang. Key poses for it, as
@@ -371,6 +393,8 @@ export function animateRig(rig, motion) {
  * turn left, negative reach = the left arm reaching forward too).
  */
 const CARRY = [-0.3, 0.16, -0.45, 0, 0] // arm by the side, boomerang held upright at the hip
+const IDLE_R = [0.6, 0.4, -0.65, -0.12, 0] // ready stance: arm out and back, elbow bent
+const CATCH = [-1.3, 0.55, -0.35, 0.3, -0.25] // reaching up and forward to meet the boomerang
 const WIND_UP = [0.3, 1.35, -1.1, -0.75, -0.55] // arm swung out and back, shoulders turned away
 const RELEASE = [-1.4, 0.35, -0.12, 0.55, -1.3] // both arms swept forward across the body
 /** Sidearm throw timeline (fractions of the throw): wind-up ends, release ends. */
@@ -397,12 +421,33 @@ function poseArm(rig, a, b, t) {
  * shoulders turn away, then whips forward across the body to release, and
  * settles back to the carry.
  */
-function poseThrow(rig, phase) {
-  if (phase < THROW_WIND_END) poseArm(rig, CARRY, WIND_UP, phase / THROW_WIND_END)
+function poseThrow(rig, phase, rest) {
+  if (phase < THROW_WIND_END) poseArm(rig, rest, WIND_UP, phase / THROW_WIND_END)
   else if (phase < THROW_RELEASE_END) {
     poseArm(rig, WIND_UP, RELEASE, (phase - THROW_WIND_END) / (THROW_RELEASE_END - THROW_WIND_END))
-  } else poseArm(rig, RELEASE, CARRY, (phase - THROW_RELEASE_END) / (1 - THROW_RELEASE_END))
+  } else poseArm(rig, RELEASE, rest, (phase - THROW_RELEASE_END) / (1 - THROW_RELEASE_END))
 }
+
+/** Reach out as the boomerang comes back (it lands at CATCH_AT), then pull it in. */
+function poseCatch(rig, phase, rest) {
+  if (phase < CATCH_AT) poseArm(rig, rest, CATCH, phase / CATCH_AT)
+  else poseArm(rig, CATCH, rest, (phase - CATCH_AT) / (1 - CATCH_AT))
+}
+
+/** The free arm in the ready stance: out to the side and forward, elbow bent; `w` blends it. */
+function poseLeftIdle(rig, time, w) {
+  if (w <= 0) return
+  const breath = Math.sin(time * 1.8)
+  sway(rig, 'ArmL1', (-0.38 - breath * 0.03) * w)
+  swing(rig, 'ArmL1', -0.5 * w)
+  swing(rig, 'ArmL2', -0.75 * w)
+}
+
+/** Ready stance: each leg out to the side, and the knee bend (radians). */
+const STANCE_SPREAD = 0.4
+const STANCE_BEND = 0.12
+/** Height lost by two thigh-length segments spread and bent like that, per thigh length. */
+const STANCE_DROP = 2 * (1 - Math.cos(STANCE_SPREAD) * Math.cos(STANCE_BEND))
 
 function poseBase(rig, motion) {
   const { time = 0, speed = 0, grounded = true, maxSpeed = 6, velY = 0 } = motion
@@ -424,20 +469,23 @@ function poseBase(rig, motion) {
     swing(rig, 'ArmR1', -0.6)
     swing(rig, 'ArmR2', -0.5)
     swing(rig, 'Spine1', -0.12 + fall * 0.1)
-    return
+    return AIR
   }
 
-  // --- Standing still: relaxed, weight on one leg, breathing (the boomerang
-  // arm is posed by animateRig) ---------------------------------------------------
+  // --- Standing still: a ready stance — feet wide apart, knees a little bent,
+  // breathing (the arms, one forward and one back, are posed by animateRig) --------
   if (ratio < 0.04) {
     const breath = Math.sin(time * 1.8)
-    sway(rig, 'LegL1', -0.06)
-    sway(rig, 'LegR1', 0.04)
-    sway(rig, 'ArmL1', -0.14 - breath * 0.03)
-    swing(rig, 'ArmL2', -0.2)
-    swing(rig, 'Spine1', breath * 0.015)
-    rig.root.position.y = rig.rootRestY + breath * 0.02
-    return
+    sway(rig, 'LegL1', -STANCE_SPREAD)
+    sway(rig, 'LegR1', STANCE_SPREAD)
+    swing(rig, 'LegL1', -STANCE_BEND)
+    swing(rig, 'LegR1', -STANCE_BEND)
+    swing(rig, 'LegL2', STANCE_BEND * 2)
+    swing(rig, 'LegR2', STANCE_BEND * 2)
+    swing(rig, 'Spine1', -0.05 + breath * 0.015)
+    // Spread legs reach less far down: lower the body so the feet stay on the floor.
+    rig.root.position.y = rig.rootRestY - (rig.thigh ?? 0) * STANCE_DROP + breath * 0.02
+    return IDLE
   }
 
   // --- Walk / run cycle -----------------------------------------------------
@@ -463,4 +511,5 @@ function poseBase(rig, motion) {
   // Lean into the run, and bob once per step (twice per full cycle).
   swing(rig, 'Spine1', -0.14 * ratio)
   rig.root.position.y = rig.rootRestY + Math.abs(Math.cos(phase)) * 0.18 * ratio
+  return MOVE
 }

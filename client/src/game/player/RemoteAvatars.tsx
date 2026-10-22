@@ -6,7 +6,7 @@ import { type Bone, type Group, Vector3 } from 'three'
 import { type AvatarRig, PlayerAvatar } from '../../bloxity/session'
 import { remotePlayers } from '../../net/remote'
 import { useGame } from '../../state/gameStore'
-import { now, THROW_ANIM_S } from '../runtime'
+import { CATCH_ANIM_S, now, THROW_ANIM_S } from '../runtime'
 import { PLAYER_HEIGHT } from './LocalPlayer'
 
 /**
@@ -17,7 +17,7 @@ import { PLAYER_HEIGHT } from './LocalPlayer'
 const RemoteAvatar = memo(function RemoteAvatar({ id, avatar }: { id: string; avatar: string }) {
   const rootRef = useRef<Group>(null)
   const look = useMemo(() => parseAvatarLook(avatar), [avatar])
-  const motionRef = useRef({ time: 0, speed: 0, grounded: true, maxSpeed: MOVE_SPEED * SPRINT_MULT, velY: 0, throwPhase: -1 })
+  const motionRef = useRef({ time: 0, speed: 0, grounded: true, maxSpeed: MOVE_SPEED * SPRINT_MULT, velY: 0, throwPhase: -1, catchPhase: -1 })
   const handRef = useRef<Bone | null>(null)
   const handLocal = useMemo(() => new Vector3(), [])
 
@@ -45,6 +45,7 @@ const RemoteAvatar = memo(function RemoteAvatar({ id, avatar }: { id: string; av
     m.speed = p.speed
     m.grounded = p.anim !== ANIM.jump
     m.throwPhase = t - p.throwAt < THROW_ANIM_S ? (t - p.throwAt) / THROW_ANIM_S : -1
+    m.catchPhase = t - p.catchAt < CATCH_ANIM_S ? (t - p.catchAt) / CATCH_ANIM_S : -1
     const hand = handRef.current
     if (hand) {
       hand.updateWorldMatrix(true, false)

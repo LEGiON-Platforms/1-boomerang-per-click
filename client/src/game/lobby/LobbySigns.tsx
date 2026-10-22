@@ -5,6 +5,7 @@ import {
   EGGS,
   formatNumber,
   INVITE_BOARD,
+  isPadOwned,
   LIKE_BOARD,
   LIKE_GOAL,
   REBIRTH_STATUE,
@@ -23,9 +24,11 @@ import {
   drawIcon,
   drawOutlined,
   ensureFont,
+  fitSize,
   preloadImages,
   REBIRTH_ICON,
   roundRect,
+  setFont,
   vGradient,
 } from '../canvasText'
 import { SignPagesMesh } from '../SignPagesMesh'
@@ -72,12 +75,13 @@ function header(text: string, icon?: Parameters<typeof drawIcon>[1]): SignSpec['
 
 interface SignInputs {
   rebirths: number
+  trainingPads: number
   bestStage: number
   boomerangsOwned: number
   vip: boolean
 }
 
-function buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }: SignInputs): SignSpec[] {
+function buildSpecs({ rebirths, trainingPads, bestStage, boomerangsOwned, vip }: SignInputs): SignSpec[] {
   const specs: SignSpec[] = []
 
   // Gate.
@@ -98,7 +102,7 @@ function buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }: SignInputs): 
   specs.push({ w: 13, h: 2.8, x: -43.6, y: 9, z: 29, rotY: Math.PI / 2, draw: header('TRAINING', 'target') })
   TRAINING_PAD_SPOTS.forEach((s, i) => {
     const pad = TRAINING_PADS[i]
-    const locked = rebirths < pad.requiredRebirths
+    const locked = !isPadOwned(pad.id, trainingPads)
     specs.push({
       w: 3.6,
       h: 2.3,
@@ -108,14 +112,20 @@ function buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }: SignInputs): 
       rotY: Math.PI / 2,
       draw: (ctx, w, h) => {
         panel(ctx, w, h, locked ? 'rgba(90,16,22,0.78)' : 'rgba(20,20,28,0.72)')
-        if (pad.requiredRebirths === 0) {
-          drawOutlined(ctx, 'FREE', w / 2, h * 0.36, h * 0.42, vGradient(ctx, h * 0.15, h * 0.55, '#d8ff5a', '#3ee060'))
+        if (locked) {
+          // Price in Wins: trophy + amount, centred together.
+          const price = formatNumber(pad.cost)
+          const size = fitSize(ctx, price, h * 0.42, w * 0.6)
+          setFont(ctx, size)
+          const icon = h * 0.36
+          const gap = icon * 0.15
+          const left = w / 2 - (icon + gap + ctx.measureText(price).width) / 2
+          drawIcon(ctx, 'trophy', left + icon / 2, h * 0.36, icon)
+          drawOutlined(ctx, price, left + icon + gap, h * 0.36, size, '#ffd21f', { align: 'left' })
         } else {
-          drawOutlined(ctx, pad.label, w * 0.38, h * 0.36, h * 0.42, '#ffffff')
-          drawIcon(ctx, 'rebirth', w * 0.66, h * 0.36, h * 0.4)
+          drawOutlined(ctx, pad.cost === 0 ? 'FREE' : 'OWNED', w / 2, h * 0.36, h * 0.42, vGradient(ctx, h * 0.15, h * 0.55, '#d8ff5a', '#3ee060'))
         }
         drawOutlined(ctx, `x${pad.mult} Power`, w / 2, h * 0.76, h * 0.25, '#ffe14a', { maxWidth: w - 10 })
-        if (locked) drawIcon(ctx, 'lock', w * 0.88, h * 0.2, h * 0.28)
       },
     })
     // "STAND HERE" decal on the pad.
@@ -274,6 +284,7 @@ function buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }: SignInputs): 
 export function LobbySigns() {
   const ready = useCanvasAssets()
   const rebirths = useGame((s) => s.data?.rebirths ?? 0)
+  const trainingPads = useGame((s) => s.data?.trainingPads ?? 1)
   const bestStage = useGame((s) => s.data?.bestStageEver ?? 0)
   const boomerangsOwned = useGame((s) => s.data?.boomerangsOwned ?? 1)
   const vip = useGame((s) => s.data?.vipBoomerang ?? false)
@@ -296,8 +307,8 @@ export function LobbySigns() {
 
   useEffect(() => {
     if (!deferDone) return
-    setPages(buildSignPages(buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }), ppu, pageSize))
-  }, [deferDone, rebirths, bestStage, boomerangsOwned, vip, ppu, pageSize])
+    setPages(buildSignPages(buildSpecs({ rebirths, trainingPads, bestStage, boomerangsOwned, vip }), ppu, pageSize))
+  }, [deferDone, rebirths, trainingPads, bestStage, boomerangsOwned, vip, ppu, pageSize])
 
   if (!pages) return null
   return <SignPagesMesh pages={pages} transparent renderOrder={2} />

@@ -3,7 +3,7 @@ import {
   clickGainFor,
   formatGain,
   formatNumber,
-  isPadUnlocked,
+  isPadOwned,
   padAtPosition,
   stageAtZ,
   stageDef,
@@ -26,7 +26,7 @@ import { ui } from '../state/uiStore'
 import { flyGain, spawnFloat } from '../ui/floating'
 import { IMPACT, launch, resolveImpact } from './fx/projectiles'
 import { DUMMY_STRIKE } from './lobby/Dummies'
-import { localPlayer, now, playerScreenPoint, throwStartAt, wallFx } from './runtime'
+import { heldBoomerang, localPlayer, now, playerScreenPoint, THROW_ANIM_S, THROW_RELEASE_AT, throwStartAt, wallFx } from './runtime'
 
 /** Just under the server's 12/s cap so normal spam-clicking is never refused. */
 const MIN_INTERVAL_MS = 1000 / 11
@@ -47,7 +47,7 @@ export function computeTarget(): typeof target {
   const g = game()
   const p = localPlayer.pos
   const pad = padAtPosition(p)
-  if (pad >= 0 && g.data && isPadUnlocked(pad, g.data.rebirths)) {
+  if (g.data && isPadOwned(pad, g.data.trainingPads)) {
     const dummy = TRAINING_PAD_SPOTS[pad].dummy
     target.kind = TARGET.dummy
     target.pad = pad
@@ -119,15 +119,9 @@ export function requestThrow(from?: { x: number; y: number }): boolean {
     lp.aimYaw = Math.atan2(t.x - lp.pos.x, t.z - lp.pos.z)
     lp.aimUntil = now() + 0.5
   }
-  launch(
-    'local',
-    seq,
-    handOf(lp.pos.x, lp.pos.y, lp.pos.z, lp.rotY),
-    t,
-    bestBoomerangId(g.data),
-    g.data.vipBoomerang,
-    g.data.equippedTrail,
-  )
+  // It's the boomerang in the hand: it flies once the arm whips forward.
+  const release = Math.max(0, lp.throwAt + THROW_ANIM_S * THROW_RELEASE_AT - now())
+  launch('local', seq, heldBoomerang.position, t, bestBoomerangId(g.data), g.data.vipBoomerang, g.data.equippedTrail, release)
   playSfx('throw')
   send(C2S.throw, { s: seq })
   return true

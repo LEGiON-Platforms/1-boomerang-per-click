@@ -23,7 +23,12 @@ const server = defineServer({
   },
 
   express: (app) => {
-    app.use(cors({ origin: CONFIG.allowedOrigins, credentials: true }))
+    // Legion's readiness/liveness probe: answers at once, touches nothing.
+    app.get('/health', (_req, res) => {
+      res.status(200).json({ ok: true })
+    })
+
+    app.use(cors({ origin: [...CONFIG.allowedOrigins], credentials: true }))
     app.use(express.json({ limit: '32kb' }))
 
     app.get('/api/health', (_req, res) => {
@@ -61,11 +66,17 @@ const server = defineServer({
   },
 })
 
+// SIGTERM / SIGINT (a Legion deploy or scale-down): Colyseus stops taking joins and
+// disconnects every room — each player is saved as they leave (GameRoom.onLeave),
+// and their client rejoins through the matchmaker on a fresh server. Then this
+// saves anyone still in memory and closes the store before the process exits.
 server.onShutdown(async () => {
+  console.log('[server] shutting down: saving players')
   leaderboards.stop()
   await players.saveAll()
   await store.close()
 })
 
 await server.listen(CONFIG.port)
-console.log(`[server] listening on http://localhost:${CONFIG.port}`)
+const { gameId, channel, pod } = CONFIG.host
+console.log(`[server] listening on :${CONFIG.port} (game ${gameId}, channel ${channel}${pod ? `, pod ${pod}` : ''})`)

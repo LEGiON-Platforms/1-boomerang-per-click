@@ -5,6 +5,7 @@ import { send } from '../net/connection'
 import { game } from '../state/gameStore'
 import { ui } from '../state/uiStore'
 import { displayStart } from './lobby/boomerangDisplay'
+import { tryBuyPad } from './trainingPads'
 
 /** "E" / tap on the prompt: act on whatever lobby object the player is next to. */
 export function interact(): void {
@@ -28,5 +29,8 @@ export function interact(): void {
       else ui().openPanel('shop')
       break
     }
+    case 'trainPad':
+      tryBuyPad(target.index, false)
+      break
   }
 }

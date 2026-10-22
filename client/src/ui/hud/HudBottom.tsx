@@ -1,15 +1,15 @@
 import {
   autoThrowUnlocked,
   BOOMERANGS,
+  bestOwnedPad,
   BOOSTS,
   type BoostId,
-  C2S,
   clickGainFor,
   EGGS,
   formatGain,
   formatNumber,
   formatTimer,
-  isPadUnlocked,
+  isPadOwned,
   levelForXp,
   levelProgress,
   TRAINING_PADS,
@@ -18,12 +18,11 @@ import {
 import { playSfx } from '../../audio/sfx'
 import { interact } from '../../game/interact'
 import { displayStart } from '../../game/lobby/boomerangDisplay'
-import { send } from '../../net/connection'
+import { tryBuyPad } from '../../game/trainingPads'
 import { isTouchDevice } from '../../state/qualityStore'
 import { useGame, type InteractTarget } from '../../state/gameStore'
-import { ui } from '../../state/uiStore'
 import { useGameThrottled, useServerClock } from '../hooks'
-import { HandIcon, PowerBurstIcon } from '../icons'
+import { HandIcon, PowerBurstIcon, TrophyIcon } from '../icons'
 import { Num } from '../Num'
 
 const QUICK_COLORS = ['bg-green', 'bg-blue', 'bg-yellow', 'bg-red']
@@ -35,20 +34,23 @@ function useFriendsInRoom(): number {
   return players.filter((p) => !p.isLocal && friends.includes(p.pid)).length
 }
 
-/** Four training buttons: the best unlocked pads (+ the next locked one); tap to teleport. */
+/**
+ * Four training buttons: the best owned pads (+ the next one for sale). Tap an owned
+ * pad to teleport onto it; tap the next one to buy it with Wins (then teleport).
+ */
 function QuickTrain() {
   const data = useGame((s) => s.data)
   const onPad = useGame((s) => s.onPad)
   const friends = useFriendsInRoom()
   const now = useServerClock(5000)
   if (!data) return null
-  const best = TRAINING_PADS.reduce((b, p) => (data.rebirths >= p.requiredRebirths ? p.id : b), 0)
+  const best = bestOwnedPad(data.trainingPads)
   const end = Math.min(TRAINING_PADS.length - 1, Math.max(3, best + (best < TRAINING_PADS.length - 1 ? 1 : 0)))
   const pads = TRAINING_PADS.slice(end - 3, end + 1)
   return (
     <div className="train-row">
       {pads.map((pad, i) => {
-        const unlocked = isPadUnlocked(pad.id, data.rebirths)
+        const unlocked = isPadOwned(pad.id, data.trainingPads)
         // Locked pads still show what they would give, so there is something to aim for.
         const gain = unlocked
           ? clickGainFor(data, { padId: pad.id, friendsInRoom: friends, now })
@@ -60,16 +62,21 @@ function QuickTrain() {
             className={`btn3d studs train-tile ${QUICK_COLORS[i]} ${onPad === pad.id ? 'active' : ''}`}
             onClick={() => {
               playSfx('click')
-              if (unlocked) send(C2S.teleportPad, { pad: pad.id })
-              else ui().toast(`Unlocks at Rebirth ${pad.requiredRebirths}`, 'error')
+              tryBuyPad(pad.id, true)
             }}
           >
             <Num value={`+${formatGain(gain)}`} className="gain txt-outline" />
-            {/* Rebirths needed, as a green token like the original (pad 1 shows its multiplier). */}
-            <span className="tag txt-outline">
-              {pad.requiredRebirths > 0 && <span className="rb-token" />}
-              <Num value={pad.requiredRebirths > 0 ? String(pad.requiredRebirths) : `x${pad.mult}`} />
-            </span>
+            {/* Owned pads show their multiplier; the rest their price in Wins. */}
+            {unlocked ? (
+              <span className="tag txt-outline">
+                <Num value={`x${pad.mult}`} />
+              </span>
+            ) : (
+              <span className="tag cost txt-outline">
+                <TrophyIcon size={26} />
+                <Num value={formatNumber(pad.cost)} />
+              </span>
+            )}
           </button>
         )
       })}
@@ -104,6 +111,8 @@ function promptLabel(t: InteractTarget, owned: number): string {
       if (b.id === owned) return `Buy ${b.name} · ${formatNumber(b.cost)} Wins`
       return b.id < owned ? `${b.name} (Owned)` : 'Boomerang Shop'
     }
+    case 'trainPad':
+      return `Buy Training Pad · ${formatNumber(TRAINING_PADS[t.index]?.cost ?? 0)} Wins`
   }
 }
 

@@ -7,7 +7,7 @@ import {
   EGG_SPOTS,
   formatNumber,
   INTERACT_RADIUS,
-  isPadUnlocked,
+  isPadOwned,
   levelForXp,
   levelSpeedMult,
   MOVE_RATE_HZ,
@@ -81,8 +81,11 @@ function sendMove(nowMs: number): void {
   send(C2S.move, { x: lp.pos.x, y: lp.pos.y, z: lp.pos.z, r: lp.rotY, a: lp.anim })
 }
 
-function findInteract(): InteractTarget | null {
+function findInteract(padsOwned: number): InteractTarget | null {
   const p = localPlayer.pos
+  // Standing on a pad not bought yet: offer to buy it.
+  const pad = padAtPosition(p)
+  if (pad >= 0 && !isPadOwned(pad, padsOwned)) return { kind: 'trainPad', index: pad }
   let best: InteractTarget | null = null
   let bestD = INTERACT_RADIUS
   const consider = (kind: InteractTarget['kind'], index: number, spot: { x: number; z: number }, radius = INTERACT_RADIUS) => {
@@ -115,7 +118,7 @@ function tick(): void {
   // HUD-facing derived state, written only on change.
   const stageHere = stageAtZ(p.z)
   const onPad = padAtPosition(p)
-  const nearInteract = findInteract()
+  const nearInteract = findInteract(g.data.trainingPads)
   const patch: Partial<ReturnType<typeof game>> = {}
   if (stageHere !== g.stageHere) patch.stageHere = stageHere
   if (onPad !== g.onPad) patch.onPad = onPad
@@ -183,9 +186,8 @@ export function startLogic(): () => void {
   autoTimer = window.setInterval(() => {
     const g = game()
     if (!g.data) return
-    // Standing on an unlocked training pad trains by itself (clicking adds more).
-    const pad = padAtPosition(localPlayer.pos)
-    const training = pad >= 0 && isPadUnlocked(pad, g.data.rebirths)
+    // Standing on an owned training pad trains by itself (clicking adds more).
+    const training = isPadOwned(padAtPosition(localPlayer.pos), g.data.trainingPads)
     if (training || ((g.autoThrow || g.autoWin) && (autoThrowUnlocked(g.data) || g.autoWin))) requestThrow()
   }, 1000 / THROW.autoPerSecond)
   return () => {

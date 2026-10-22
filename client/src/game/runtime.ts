@@ -16,6 +16,8 @@ export const localPlayer = {
   anim: ANIM.idle as number,
   /** Clock time (s) of the last throw, for the arm swing. */
   throwAt: -10,
+  /** Clock time (s) the player reached out for a returning boomerang. */
+  catchAt: -10,
   /** Face this yaw while throwing in place (null = face movement). */
   aimYaw: null as number | null,
   /** Seconds the aim yaw stays locked after a throw. */
@@ -65,6 +67,26 @@ export function throwFlatness(phase: number): number {
   return Math.max(0, 1 - (phase - 0.55) / 0.35)
 }
 
+/** Fraction of the throw swing at which the boomerang leaves the hand. */
+export const THROW_RELEASE_AT = 0.3
+
+/** Length of a catch (s): reach out for the returning boomerang, then pull it in. */
+export const CATCH_ANIM_S = 0.36
+/** Fraction of the catch at which the boomerang lands in the hand. */
+export const CATCH_AT = 0.4
+
+/** How flat a caught boomerang is at `phase` (0..1) of the catch: lands flat, turns upright. */
+export function catchFlatness(phase: number): number {
+  if (phase < 0 || phase >= 1) return 0
+  if (phase < CATCH_AT) return 1
+  return 1 - (phase - CATCH_AT) / (1 - CATCH_AT)
+}
+
+/** Like throwStartAt, for catches: a second boomerang arriving mid-catch doesn't restart it. */
+export function catchStartAt(previous: number, t: number): number {
+  return t - previous > CATCH_ANIM_S * 0.5 ? t : previous
+}
+
 /** Dev only: freeze the local throw at a phase (0..1) for screenshots; null = live. */
 export const devPose: { throwPhase: number | null } = { throwPhase: null }
 
@@ -81,8 +103,12 @@ export function playerScreenPoint(up = 1.3): { x: number; y: number } {
   return { x: (_screen.x * 0.5 + 0.5) * window.innerWidth, y: (-_screen.y * 0.5 + 0.5) * window.innerHeight }
 }
 
-/** Clock time of the last hit on the active wall (for its shake). */
-export const wallFx = { hitAt: -10 }
+/**
+ * Active-wall effects: when it was last hit (its shake), and when and where the
+ * boomerang that broke it struck (the wall shatters at that moment, not when the
+ * server's verdict arrives).
+ */
+export const wallFx = { hitAt: -10, breakAt: -10, breakX: 0 }
 
 /** Auto Win steering: the controller walks towards (x, z) when there's no manual input. */
 export const autopilot = { active: false, x: 0, z: 0 }

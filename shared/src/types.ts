@@ -2,6 +2,7 @@
  * The persisted player record. The server owns it; the client receives copies.
  */
 
+import { legacyPadsOwned } from './config/pads'
 import { type EggId, PET_BY_ID, type Rarity } from './config/pets'
 import type { BadgeId, BoostId } from './config/retention'
 
@@ -69,6 +70,8 @@ export interface PlayerData {
 
   /** Count of boomerangs owned; they are bought in order, so ids 0..n-1 are owned. */
   boomerangsOwned: number
+  /** Count of training pads owned (bought in order with Wins, kept through rebirths). */
+  trainingPads: number
   vipBoomerang: boolean
   trailsOwned: number[]
   equippedTrail: number
@@ -127,6 +130,7 @@ export function createPlayerData(id: string, name: string, now: number): PlayerD
     stageCleared: 0,
     bestStageEver: 0,
     boomerangsOwned: 1,
+    trainingPads: 1,
     vipBoomerang: false,
     trailsOwned: [0],
     equippedTrail: 0,
@@ -185,6 +189,8 @@ export function normalizePlayerData(raw: unknown, id: string, name: string, now:
     stageCleared: num(r.stageCleared, 0),
     bestStageEver: num(r.bestStageEver, 0),
     boomerangsOwned: Math.max(1, num(r.boomerangsOwned, 1)),
+    // Saves from before pads were bought keep the pads their rebirths had unlocked.
+    trainingPads: Math.max(1, num(r.trainingPads, legacyPadsOwned(num(r.rebirths, 0)))),
     trailsOwned: Array.isArray(r.trailsOwned) && r.trailsOwned.length ? r.trailsOwned : [0],
     pets: Array.isArray(r.pets) ? r.pets : [],
     equippedPets: Array.isArray(r.equippedPets) ? r.equippedPets : [],

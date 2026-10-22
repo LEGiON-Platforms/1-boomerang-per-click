@@ -30,11 +30,11 @@ export interface LuckyInfo {
   z: number
 }
 
-export type InteractKind = 'trails' | 'pedestal' | 'egg' | 'rebirth'
+export type InteractKind = 'trails' | 'pedestal' | 'egg' | 'rebirth' | 'trainPad'
 
 export interface InteractTarget {
   kind: InteractKind
-  /** Pedestal slot or egg index. */
+  /** Pedestal slot, egg index or training pad id. */
   index: number
 }
 

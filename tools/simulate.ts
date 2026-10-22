@@ -24,6 +24,7 @@ import {
   STAGE_COUNT,
   stageTotalHp,
   TRAILS,
+  TRAINING_PADS,
   WALL_HP,
 } from '@game/shared'
 
@@ -37,7 +38,7 @@ const arg = (name: string, fallback: number) => {
 
 const cps = arg('cps', 5)
 const result = runSimulation({ cps, maxHours: arg('hours', 40) })
-const { stageReached, rebirths, endTime, player } = result
+const { stageReached, rebirths, padsBought, endTime, player } = result
 
 export const fmtTime = (s: number) => {
   if (!Number.isFinite(s)) return '—'
@@ -60,6 +61,7 @@ out.push(
 )
 out.push(`  rebirth n  = level ${REBIRTH.levelStep}·n; XP to level 2 = ${LEVEL.base}, growth ${LEVEL.earlyGrowth} → ${LEVEL.lateGrowth} over ${LEVEL.taper} levels`)
 out.push(`  boomerangs = ${BOOMERANGS.map((b) => formatNumber(b.cost)).join(', ')}`)
+out.push(`  pads       = ${TRAINING_PADS.map((p) => `x${p.mult} ${formatNumber(p.cost)}`).join(', ')}`)
 out.push('')
 out.push('Stage | First cleared | Rebirths by then | Stage HP (10 walls) | Pad wins | Target')
 out.push('------|---------------|------------------|---------------------|----------|---------')
@@ -76,6 +78,15 @@ out.push('--------|-----------|----------------------|------')
 for (const r of rebirths.slice(0, 40)) {
   out.push(
     `${String(r.r).padStart(7)} | ${fmtTime(r.t).padStart(9)} | ${String(r.stage).padStart(20)} | ${rebirthLevel(r.r - 1)}`,
+  )
+}
+out.push('')
+out.push('Pad   | Cost (Wins) | Bought at | Rebirths by then')
+out.push('------|-------------|-----------|-----------------')
+for (const p of padsBought) {
+  const def = TRAINING_PADS[p.pad]
+  out.push(
+    `${`x${def.mult}`.padStart(5)} | ${formatNumber(def.cost).padStart(11)} | ${fmtTime(p.t).padStart(9)} | ${String(rebirths.filter((r) => r.t <= p.t).length).padStart(16)}`,
   )
 }
 out.push('')

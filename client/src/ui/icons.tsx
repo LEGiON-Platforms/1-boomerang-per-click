@@ -150,15 +150,40 @@ export function FriendsIcon({ size, className, style }: IconProps) {
   )
 }
 
+/** An 8-tooth gear outline (one polygon, so one gradient shades the whole gear). */
+const GEAR_POINTS = Array.from({ length: 8 }, (_, i) => {
+  const a = (i * Math.PI) / 4
+  return [
+    [a - 0.27, 20.5],
+    [a - 0.15, 29],
+    [a + 0.15, 29],
+    [a + 0.27, 20.5],
+  ]
+    .map(([t, r]) => `${(32 + Math.sin(t) * r).toFixed(2)},${(32 - Math.cos(t) * r).toFixed(2)}`)
+    .join(' ')
+}).join(' ')
+
 export function GearIcon({ size, className, style }: IconProps) {
-  const teeth = Array.from({ length: 8 }, (_, i) => (
-    <rect key={i} x="28" y="2" width="8" height="14" rx="2" fill="#c9ced6" stroke={STROKE} strokeWidth="3" transform={`rotate(${i * 45} 32 32)`} />
-  ))
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '')
   return (
     <svg viewBox="0 0 64 64" style={{ ...box(size), ...style }} className={className}>
-      {teeth}
-      <circle cx="32" cy="32" r="18" fill="#c9ced6" stroke={STROKE} strokeWidth="4" />
-      <circle cx="32" cy="32" r="7" fill="#6b7280" stroke={STROKE} strokeWidth="3" />
+      <defs>
+        <linearGradient id={`${uid}m`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.5" stopColor="#d3d9e3" />
+          <stop offset="1" stopColor="#8a94a6" />
+        </linearGradient>
+        <radialGradient id={`${uid}j`} cx="0.38" cy="0.34" r="0.75">
+          <stop offset="0" stopColor="#b8f6ff" />
+          <stop offset="0.55" stopColor="#36b3ff" />
+          <stop offset="1" stopColor="#1652d9" />
+        </radialGradient>
+      </defs>
+      <polygon points={GEAR_POINTS} fill={`url(#${uid}m)`} stroke={STROKE} strokeWidth="4" strokeLinejoin="round" />
+      <circle cx="32" cy="32" r="13.5" fill="none" stroke="#7b8598" strokeWidth="2.5" />
+      <circle cx="32" cy="32" r="8.5" fill={`url(#${uid}j)`} stroke={STROKE} strokeWidth="3.5" />
+      <circle cx="29.5" cy="29.5" r="2.4" fill="#ffffff" opacity="0.85" />
+      <path d="M17.5 23.5a16.5 16.5 0 0 1 9-8.5" fill="none" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
     </svg>
   )
 }

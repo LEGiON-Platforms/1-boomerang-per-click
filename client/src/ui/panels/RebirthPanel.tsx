@@ -6,7 +6,6 @@ import {
   rebirthMultiplier,
   rebirthProgressForXp,
   THROW,
-  TRAINING_PADS,
 } from '@game/shared'
 
 import { playSfx } from '../../audio/sfx'
@@ -19,9 +18,6 @@ import { Window } from '../Window'
 /** What reaching `next` rebirths newly unlocks. */
 function unlocksAt(next: number): string[] {
   const out: string[] = []
-  for (const pad of TRAINING_PADS) {
-    if (pad.requiredRebirths === next) out.push(`Training pad ${pad.label} (x${pad.mult} Power)`)
-  }
   if (PETS_CONFIG.extraSlotRebirths.includes(next)) out.push('+1 pet slot')
   if (next === PETS_CONFIG.tripleOpenRebirths) out.push('Open 3 eggs at once')
   if (next === THROW.autoUnlockRebirths) out.push('Auto Throw (free)')

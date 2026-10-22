@@ -107,7 +107,8 @@ export const LEADERBOARD_SPOTS: readonly Vec2[] = [
   { x: 18, z: 69 },
 ]
 export const LIKE_BOARD: Vec2 = { x: -34, z: 64 }
-export const INVITE_BOARD: Vec2 = { x: -24, z: 18 }
+// South-west corner: clear of the camera behind a player training on the pads.
+export const INVITE_BOARD: Vec2 = { x: -36, z: 3 }
 
 /** How close (world units) the player must be to interact with lobby objects. */
 export const INTERACT_RADIUS = 4.5

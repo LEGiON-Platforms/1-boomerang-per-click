@@ -9,8 +9,9 @@
 
 import {
   BOOMERANGS,
-  bestUnlockedPad,
+  bestOwnedPad,
   buyNextBoomerang,
+  buyTrainingPad,
   buyTrail,
   claimPad,
   clickGainFor,
@@ -29,6 +30,7 @@ import {
   STAGE_COUNT,
   THROW,
   TRAILS,
+  TRAINING_PADS,
   WALL_SPACING,
   WALL_THICKNESS,
   wallBreakWins,
@@ -48,6 +50,8 @@ export interface SimResult {
   /** Seconds at which each stage was first cleared (index 0 = stage 1). */
   stageReached: number[]
   rebirths: { r: number; t: number; stage: number }[]
+  /** When each training pad was bought. */
+  padsBought: { pad: number; t: number }[]
   endTime: number
   player: PlayerData
 }
@@ -106,9 +110,10 @@ export function runSimulation(opts: SimOptions): SimResult {
   let time = 0
   const stageReached: number[] = []
   const rebirths: SimResult['rebirths'] = []
+  const padsBought: SimResult['padsBought'] = []
 
   const gainNoPad = () => clickGainFor(d, ctxNoPad)
-  const gainPad = () => clickGainFor(d, { padId: bestUnlockedPad(d.rebirths), friendsInRoom: 0, now: 0 })
+  const gainPad = () => clickGainFor(d, { padId: bestOwnedPad(d.trainingPads), friendsInRoom: 0, now: 0 })
   const nextTrail = () => TRAILS.find((x) => !d.trailsOwned.includes(x.id))
 
   /** Permanent perks the simulated player saves for once nothing cheaper is left (Auto Win doesn't change click speed). */
@@ -118,6 +123,7 @@ export function runSimulation(opts: SimOptions): SimResult {
     const perk = nextPerk()
     return Math.min(
       BOOMERANGS[d.boomerangsOwned]?.cost ?? Infinity,
+      TRAINING_PADS[d.trainingPads]?.cost ?? Infinity,
       nextTrail()?.cost ?? Infinity,
       perk ? PERK_SHOP[perk].cost : Infinity,
     )
@@ -127,6 +133,10 @@ export function runSimulation(opts: SimOptions): SimResult {
     let bought = true
     while (bought) {
       bought = false
+      if (buyTrainingPad(d).ok) {
+        bought = true
+        padsBought.push({ pad: d.trainingPads - 1, t: time })
+      }
       if (buyNextBoomerang(d).ok) bought = true
       const t = nextTrail()
       if (t && buyTrail(d, t.id).ok) bought = true
@@ -220,5 +230,5 @@ export function runSimulation(opts: SimOptions): SimResult {
     }
   }
 
-  return { stageReached, rebirths, endTime: time, player: d }
+  return { stageReached, rebirths, padsBought, endTime: time, player: d }
 }

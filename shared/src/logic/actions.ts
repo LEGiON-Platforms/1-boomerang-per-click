@@ -7,6 +7,7 @@
  */
 
 import { BOOMERANGS } from '../config/boomerangs'
+import { TRAINING_PADS } from '../config/pads'
 import {
   padWins,
   levelForXp,
@@ -163,6 +164,16 @@ export function buyNextBoomerang(d: PlayerData): Result<{ id: number }> {
   if (d.wins < next.cost) return fail('not_enough_wins')
   d.wins -= next.cost
   d.boomerangsOwned += 1
+  return { ok: true, id: next.id }
+}
+
+/** Buys the next training pad (they are bought in order). */
+export function buyTrainingPad(d: PlayerData): Result<{ id: number }> {
+  const next = TRAINING_PADS[d.trainingPads]
+  if (!next) return fail('all_owned')
+  if (d.wins < next.cost) return fail('not_enough_wins')
+  d.wins -= next.cost
+  d.trainingPads += 1
   return { ok: true, id: next.id }
 }
 

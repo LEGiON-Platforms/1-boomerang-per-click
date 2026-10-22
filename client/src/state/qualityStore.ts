@@ -15,7 +15,8 @@ export interface QualitySettings {
   shadowMapSize: number
   /** Max live particles; 0 disables particles entirely. */
   particles: number
-  playerTrails: boolean
+  /** Walking trails: only the local player's (LOW) or everyone's. */
+  playerTrails: 'local' | 'all'
   clouds: boolean
   /** Camera far plane and fog end. */
   viewDistance: number
@@ -47,7 +48,7 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     shadows: false,
     shadowMapSize: 512,
     particles: 0,
-    playerTrails: false,
+    playerTrails: 'local',
     clouds: false,
     viewDistance: 140,
     fogNear: 50,
@@ -65,7 +66,7 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     shadows: true,
     shadowMapSize: 1024,
     particles: 80,
-    playerTrails: false,
+    playerTrails: 'all',
     clouds: true,
     viewDistance: 260,
     fogNear: 90,
@@ -83,7 +84,7 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     shadows: true,
     shadowMapSize: 2048,
     particles: 160,
-    playerTrails: true,
+    playerTrails: 'all',
     clouds: true,
     viewDistance: 420,
     fogNear: 120,

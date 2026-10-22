@@ -140,11 +140,14 @@ export const LEVEL = {
   taper: 18.8,
 }
 
-/** Walking gets faster with level: +1% per level above 1, capped. */
-export const LEVEL_SPEED = { perLevel: 0.01, max: 0.6 }
+/**
+ * Walking gets faster with level, quickly at first and easing towards double speed:
+ * about +18% at level 5, +50% at 15 (the first rebirth), +77% at 30.
+ */
+export const LEVEL_SPEED = { max: 1, scale: 20 }
 
 export function levelSpeedMult(level: number): number {
-  return 1 + Math.min(LEVEL_SPEED.max, Math.max(0, level - 1) * LEVEL_SPEED.perLevel)
+  return 1 + LEVEL_SPEED.max * (1 - Math.exp(-Math.max(0, level - 1) / LEVEL_SPEED.scale))
 }
 
 const LEVEL_CAP = 2000

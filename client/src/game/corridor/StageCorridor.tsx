@@ -41,6 +41,7 @@ import { useQuality } from '../../state/qualityStore'
 import { PropBuilder } from '../builder'
 import { now, wallFx } from '../runtime'
 import { createStudTexture, createWorldBoxGeometry } from '../textures'
+import { createShatterGeometry, createShatterMaterial, SHATTER_TIME, type ShatterUniforms } from './wallShatter'
 import { createWallTexture, getCrackTexture } from './wallTextures'
 
 const MAX_WINDOW = 3
@@ -251,16 +252,53 @@ const StageWalls = memo(function StageWalls({ stage }: { stage: number }) {
     [texture, material],
   )
 
+  // The breaking wall's chunks (one shared burst per stage; see wallShatter.ts).
+  const shatterRef = useRef<Mesh>(null)
+  const shatterGeo = useMemo(() => createShatterGeometry(tile), [tile])
+  const shatterUniforms = useMemo<ShatterUniforms>(() => ({ uT: { value: SHATTER_TIME }, uImpact: { value: { x: 0, y: 2.6 } } }), [])
+  const shatterMat = useMemo(() => createShatterMaterial(material, shatterUniforms), [material, shatterUniforms])
+  useEffect(
+    () => () => {
+      shatterGeo.dispose()
+    },
+    [shatterGeo],
+  )
+  useEffect(
+    () => () => {
+      shatterMat.dispose()
+    },
+    [shatterMat],
+  )
+  // Drawn once right after mount, collapsed to nothing (uT at the end of the burst):
+  // the real render path compiles its shader then, so the first break doesn't hitch.
+  const warm = useRef(0)
+  useLayoutEffect(() => {
+    const m = shatterRef.current
+    if (!m) return
+    shatterUniforms.uT.value = SHATTER_TIME
+    m.visible = true
+    warm.current = 1
+  }, [shatterMat, shatterUniforms])
+
   const broken = stage < run.stage ? WALLS_PER_STAGE : stage === run.stage ? run.wallsBroken : 0
   const locked = stage > unlocked
+
+  // A wall the server just broke stays up until our boomerang reaches it, then shatters.
+  const prevBroken = useRef(-1)
+  const pending = useRef({ wall: -1, since: 0 })
+  const shatterStart = useRef(-10)
 
   // Wall visibility only changes with the run, so matrices are written here, not per frame.
   // Layout effect: positions are set before the first frame (identity = the lobby gate).
   useLayoutEffect(() => {
     const mesh = ref.current
     if (!mesh) return
+    const justBroke = prevBroken.current >= 0 && broken === prevBroken.current + 1 && stage === run.stage
+    prevBroken.current = broken
+    pending.current.wall = justBroke ? broken - 1 : -1
+    pending.current.since = now()
     for (let w = 0; w < WALLS_PER_STAGE; w += 1) {
-      if (w < broken) {
+      if (w < broken && w !== pending.current.wall) {
         mesh.setMatrixAt(w, HIDDEN)
         continue
       }
@@ -270,14 +308,34 @@ const StageWalls = memo(function StageWalls({ stage }: { stage: number }) {
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     mesh.computeBoundingSphere()
-  }, [broken, locked, stage])
+  }, [broken, locked, stage, run.stage])
 
-  // A short shake on the active wall when it's hit.
+  // A short shake on the active wall when it's hit; the break itself.
   const shaking = useRef(false)
   useFrame(() => {
     const mesh = ref.current
-    if (!mesh || stage !== run.stage || broken >= WALLS_PER_STAGE) return
-    const since = now() - wallFx.hitAt
+    const shatter = shatterRef.current
+    if (!mesh || !shatter) return
+    const t = now()
+    const p = pending.current
+    // Normally the impact comes a few frames after the verdict; never wait long for it.
+    if (p.wall >= 0 && (wallFx.breakAt >= p.since || t - p.since > 0.45)) {
+      mesh.setMatrixAt(p.wall, HIDDEN)
+      mesh.instanceMatrix.needsUpdate = true
+      shatter.position.set(0, 0, wallZ(stage, p.wall + 1))
+      shatterUniforms.uImpact.value.x = wallFx.breakAt >= p.since ? wallFx.breakX : 0
+      shatter.visible = true
+      shatterStart.current = t
+      p.wall = -1
+    }
+    if (warm.current > 0) warm.current -= 1
+    else if (shatter.visible) {
+      const s = t - shatterStart.current
+      shatterUniforms.uT.value = s
+      if (s > SHATTER_TIME) shatter.visible = false
+    }
+    if (stage !== run.stage || broken >= WALLS_PER_STAGE) return
+    const since = t - wallFx.hitAt
     if (since < 0.16 || shaking.current) {
       shaking.current = since < 0.16
       const x = shaking.current ? Math.sin(since * 120) * 0.12 : 0
@@ -286,7 +344,13 @@ const StageWalls = memo(function StageWalls({ stage }: { stage: number }) {
     }
   })
 
-  return <instancedMesh ref={ref} args={[geometry, material, WALLS_PER_STAGE]} castShadow receiveShadow frustumCulled={false} />
+  return (
+    <>
+      <instancedMesh ref={ref} args={[geometry, material, WALLS_PER_STAGE]} castShadow receiveShadow frustumCulled={false} />
+      {/* The shader moves the chunks, so the bounds can't be trusted: no culling. */}
+      <mesh ref={shatterRef} geometry={shatterGeo} material={shatterMat} visible={false} frustumCulled={false} />
+    </>
+  )
 })
 
 /** Cracks spreading over the whole active wall as its HP drops. */

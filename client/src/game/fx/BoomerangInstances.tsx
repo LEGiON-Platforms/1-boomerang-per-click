@@ -14,13 +14,13 @@ import {
   Vector3,
 } from 'three'
 
-import { remoteList } from '../../net/remote'
+import { remoteList, remotePlayers } from '../../net/remote'
 import { game } from '../../state/gameStore'
 import { type Preset, useQuality } from '../../state/qualityStore'
 import { buildBoomerangGeometry, createBoomerangMaterial, holdPose, setBoomerangTime } from '../boomerangModel'
 import { type BoomerangLook, boomerangLook, SHAPE_KEYS } from '../boomerangShapes'
 import { displayStart } from '../lobby/boomerangDisplay'
-import { heldBoomerang, localPlayer, now, THROW_ANIM_S, throwFlatness } from '../runtime'
+import { CATCH_ANIM_S, catchFlatness, heldBoomerang, localPlayer, now, THROW_ANIM_S, throwFlatness } from '../runtime'
 import { PROJECTILE_CAPACITY, projectilePosition, projectiles, stepProjectiles } from './projectiles'
 
 /**
@@ -199,10 +199,43 @@ export function BoomerangInstances() {
       set.add(boomerangLook(0, true))
     }
 
-    // The local player's held boomerang, gripped by its tip at the right hand
-    // (LocalPlayer tracks the hand; the arm pose does the wind-up and release).
+    // Boomerangs in flight: thrown flat, spinning fast in a horizontal circle along
+    // their curved out-and-back path, banked a little into the turn. Counted per
+    // thrower: a hand stays empty while its boomerang is out.
     const held = heldBoomerang
-    if (held.visible && data) {
+    let localOut = 0
+    for (let r = 0; r < remoteList.length; r += 1) remoteList[r].out = 0
+    for (let i = 0; i < PROJECTILE_CAPACITY; i += 1) {
+      const pr = projectiles[i]
+      if (!pr.active) continue
+      if (pr.owner === 'local') {
+        localOut += 1
+        // Not released yet: still the boomerang in the hand, mid wind-up.
+        if (pr.t <= 0) {
+          if (held.visible) {
+            poseHeld(held.position, held.yaw, pr.look, held.flat)
+            set.add(pr.look)
+          }
+          continue
+        }
+      } else {
+        const thrower = remotePlayers.get(pr.owner)
+        if (thrower) thrower.out += 1
+      }
+      _o.position.copy(projectilePosition(pr, _p))
+      const heading = Math.atan2(pr.to.x - pr.from.x, pr.to.z - pr.from.z)
+      _qa.setFromAxisAngle(Y_AXIS, heading)
+      _qb.setFromAxisAngle(Z_AXIS, FLIGHT_BANK)
+      _qc.setFromAxisAngle(Y_AXIS, pr.t * FLIGHT_SPIN)
+      _o.quaternion.copy(_qa).multiply(_qb).multiply(_qc)
+      _o.scale.setScalar(0.8)
+      set.add(pr.look)
+    }
+
+    // The local player's held boomerang, gripped by its tip at the right hand
+    // (LocalPlayer tracks the hand; the arm pose does the wind-up, release and catch).
+    // Hidden while one is out: that one comes back to the hand.
+    if (held.visible && data && localOut === 0) {
       const look = boomerangLook(bestBoomerangId(data), data.vipBoomerang)
       poseHeld(held.position, held.yaw, look, held.flat)
       set.add(look)
@@ -211,6 +244,7 @@ export function BoomerangInstances() {
     // Other players' held boomerangs: same grip at an estimated hand (raised mid-throw).
     for (let r = 0; r < remoteList.length && r < MAX_CLIENTS; r += 1) {
       const p = remoteList[r]
+      if (p.out > 0) continue
       const throwing = t - p.throwAt < THROW_ANIM_S
       if (p.full && t - p.handAt < 0.2) _p.copy(p.hand) // their avatar's real hand
       else {
@@ -221,23 +255,9 @@ export function BoomerangInstances() {
         )
       }
       const look = boomerangLook(p.boomerang, p.vip)
-      poseHeld(_p, p.prot, look, throwing ? throwFlatness((t - p.throwAt) / THROW_ANIM_S) : 0)
+      const flat = throwing ? throwFlatness((t - p.throwAt) / THROW_ANIM_S) : catchFlatness((t - p.catchAt) / CATCH_ANIM_S)
+      poseHeld(_p, p.prot, look, flat)
       set.add(look)
-    }
-
-    // Boomerangs in flight: thrown flat, spinning fast in a horizontal circle along
-    // their curved out-and-back path, banked a little into the turn.
-    for (let i = 0; i < PROJECTILE_CAPACITY; i += 1) {
-      const pr = projectiles[i]
-      if (!pr.active) continue
-      _o.position.copy(projectilePosition(pr, _p))
-      const heading = Math.atan2(pr.to.x - pr.from.x, pr.to.z - pr.from.z)
-      _qa.setFromAxisAngle(Y_AXIS, heading)
-      _qb.setFromAxisAngle(Z_AXIS, FLIGHT_BANK)
-      _qc.setFromAxisAngle(Y_AXIS, pr.t * FLIGHT_SPIN)
-      _o.quaternion.copy(_qa).multiply(_qb).multiply(_qc)
-      _o.scale.setScalar(0.8)
-      set.add(pr.look)
     }
 
     set.end()
