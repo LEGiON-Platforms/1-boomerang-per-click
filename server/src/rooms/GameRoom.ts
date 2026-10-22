@@ -226,6 +226,10 @@ export class GameRoom extends Room<{ state: GameState }> {
 
   private reward(s: PlayerSession, source: RewardSource, title: string, reward: RewardSummary): void {
     s.client.send(S2C.reward, { source, title, reward })
+    // A free egg inside a reward gets the full hatch animation too.
+    if (reward.eggId) {
+      s.client.send(S2C.eggResult, { egg: reward.eggId, pets: reward.pets, vip: reward.vip, free: true })
+    }
   }
 
   private teleport(s: PlayerSession, x: number, z: number, rotY: number): void {

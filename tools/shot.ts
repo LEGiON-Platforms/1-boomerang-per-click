@@ -126,6 +126,29 @@ if (stepsArg === 'panels' || stepsArg === 'all') {
   }
 }
 
+if (stepsArg === 'pets' || stepsArg === 'all') {
+  await page.keyboard.press('Escape')
+  await page.evaluate(() => {
+    const send = (window as unknown as { __bpcSend: (t: string, p?: unknown) => void }).__bpcSend
+    send('redeemCode', { code: 'RELEASE' })
+    send('redeemCode', { code: '100LIKES' })
+    setTimeout(() => send('buyGemItem', { item: 'starterPack' }), 600)
+  })
+  await sleep(2300)
+  await shot(page, '10-egg-reveal')
+  await sleep(2500)
+  await page.mouse.click(800, 450)
+  await sleep(800)
+  await page.keyboard.press('Escape')
+  await hold(page, 'd', 500)
+  await sleep(600)
+  await shot(page, '11-pet-follow')
+  await page.locator('button', { hasText: 'Items' }).first().click()
+  await sleep(700)
+  await shot(page, '12-items')
+  await page.keyboard.press('Escape')
+}
+
 const info = await page.evaluate(() => window.__bpcRenderInfo?.() ?? null)
 console.log('render info', JSON.stringify(info))
 console.log(errors.length ? `console errors/warnings:\n${errors.slice(0, 30).join('\n')}` : 'no console errors')

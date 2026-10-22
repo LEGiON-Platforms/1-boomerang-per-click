@@ -11,6 +11,8 @@ import { TrailRibbons } from './fx/TrailRibbons'
 import { FollowCamera } from './FollowCamera'
 import { Lighting } from './Lighting'
 import { Lobby } from './lobby/Lobby'
+import { LuckyBlock } from './LuckyBlock'
+import { Pets } from './pets/Pets'
 import { LocalPlayer } from './player/LocalPlayer'
 import { RemotePlayers } from './player/RemotePlayers'
 import { FOG, SKY } from './sceneStyle'
@@ -116,6 +118,8 @@ export function GameCanvas({ onAvatarReady, onFirstFrame, children }: Props) {
           <LocalPlayer onAvatarReady={onAvatarReady} />
         </Suspense>
         <RemotePlayers />
+        <Pets />
+        <LuckyBlock />
         <BoomerangInstances />
         <TrailRibbons />
         <ParticleSystem />

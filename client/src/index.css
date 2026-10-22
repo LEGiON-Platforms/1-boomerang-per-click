@@ -555,6 +555,32 @@ canvas,
   color: #dfe3ee;
 }
 
+.reveal-card {
+  width: 220px;
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 6px solid #fff;
+  border-radius: 18px;
+  background: #1a1c24;
+  animation: card-in 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+@keyframes card-in {
+  from { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes egg-shake {
+  0% { transform: rotate(-6deg) translateX(-4px); }
+  50% { transform: rotate(6deg) translateX(4px); }
+  100% { transform: rotate(-6deg) translateX(-4px); }
+}
+@keyframes egg-burst {
+  from { transform: scale(1); opacity: 1; filter: brightness(1); }
+  to { transform: scale(1.9); opacity: 0; filter: brightness(3); }
+}
+
 /* ---------------------------------------------------------------------------
  * Touch controls
  * ------------------------------------------------------------------------- */

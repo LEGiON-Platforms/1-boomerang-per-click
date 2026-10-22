@@ -211,6 +211,8 @@ export interface RewardSummary {
   vip: boolean
   /** Gems given instead of a pet because the inventory was full. */
   convertedGems: number
+  /** The egg that was opened for free, if the reward included one. */
+  eggId?: EggId
 }
 
 const emptySummary = (): RewardSummary => ({
@@ -258,6 +260,7 @@ export function grantReward(d: PlayerData, reward: RewardDef, rng: Rng, now: num
     if (opened.ok) {
       s.pets.push(...opened.pets)
       s.vip = s.vip || opened.vip
+      s.eggId = eggId
     } else {
       s.convertedGems += FULL_INVENTORY_GEMS
       d.gems += FULL_INVENTORY_GEMS
