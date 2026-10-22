@@ -123,6 +123,16 @@ if (stepsArg === 'clear' || stepsArg === 'all') {
   await shot(page, '05-stage-clear')
   await sleep(2600)
   await shot(page, '05-respawn')
+  // Walls stay down for 6 s in the lobby, then rise again (seen from high over the lobby).
+  await page.evaluate('(() => { const c = window.__bpcRuntime.cameraState; c.yaw = 0; c.pitch = 0.5; c.distance = 38 })()')
+  await sleep(800)
+  console.log('walls down?', await page.evaluate('JSON.stringify(window.__bpcRuntime.wallHold)'))
+  await shot(page, '05-lobby-walls-down')
+  await sleep(2500)
+  await shot(page, '05-lobby-walls-rising')
+  await sleep(3500)
+  console.log('walls rebuilt?', await page.evaluate('JSON.stringify(window.__bpcRuntime.wallHold)'))
+  await shot(page, '05-lobby-walls-rebuilt')
 }
 
 if (stepsArg === 'panels' || stepsArg === 'all') {

@@ -32,14 +32,14 @@ import {
 import { playSfx } from '../audio/sfx'
 import { onThrowResult, onRemoteThrow } from '../game/throwing'
 import { confetti } from '../game/fx/particles'
-import { cameraState, devPose, localPlayer, pending, playerScreenPoint } from '../game/runtime'
+import { cameraState, devPose, holdWalls, localPlayer, pending, playerScreenPoint, wallHold } from '../game/runtime'
 import { game, type RoomPlayerInfo, useGame } from '../state/gameStore'
 import { ui, useUI } from '../state/uiStore'
 import { flyTrophies } from '../ui/floating'
 import { waitForSDK } from '../bloxity/sdk'
 import { getBloxityState, useBloxityStore } from '../bloxity/store'
 import { getPlayerId } from './identity'
-import { addRemote, clearRemotes, createRemote, pushSnapshot, removeRemote } from './remote'
+import { addRemote, clearRemotes, createRemote, pushSnapshot, remotePlayers, removeRemote } from './remote'
 
 /** Mirrors the server's CLOSE_DUPLICATE. */
 const CLOSE_DUPLICATE = 4100
@@ -128,7 +128,7 @@ if (import.meta.env.DEV) {
   w.__bpcSend = (type, payload) => send(type, payload)
   ;(window as unknown as { __bpcUI: typeof useUI }).__bpcUI = useUI
   ;(window as unknown as { __bpcGame: typeof useGame }).__bpcGame = useGame
-  ;(window as unknown as { __bpcRuntime: object }).__bpcRuntime = { localPlayer, cameraState, devPose }
+  ;(window as unknown as { __bpcRuntime: object }).__bpcRuntime = { localPlayer, cameraState, devPose, wallHold, remotePlayers }
 }
 
 /** Sends a message to the game room (dropped while disconnected). */
@@ -247,6 +247,8 @@ function bindRoom(r: Room): void {
   })
   r.onMessage(S2C.padClaimed, (m: PadClaimedMsg) => {
     useUI.getState().set({ stageClear: m })
+    // Back in the lobby (after PAD_RESPAWN_MS) the walls stay down a few seconds more.
+    holdWalls(m.stage)
     playSfx('win')
     confetti(localPlayer.pos.x, 2, localPlayer.pos.z, 48)
     const at = playerScreenPoint()

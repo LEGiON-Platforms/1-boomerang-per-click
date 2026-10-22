@@ -7,7 +7,10 @@ import { Vector3 } from 'three'
  */
 
 export const SNAPSHOTS = 16
-export const INTERP_DELAY_MS = 120
+/** Remote players are drawn this far in the past, so there are always two snapshots to blend. */
+export const INTERP_DELAY_MS = 150
+/** If the newest snapshot is still older than the render time, carry on at its speed for at most this long. */
+const MAX_EXTRAPOLATE_MS = 120
 
 export interface RemotePlayer {
   sessionId: string
@@ -129,6 +132,22 @@ const lerpAngle = (a: number, b: number, t: number) => {
 /** Writes the interpolated pose for render time `nowMs` into p.px/py/pz/prot. */
 export function sampleRemote(p: RemotePlayer, nowMs: number): void {
   const target = nowMs - INTERP_DELAY_MS
+  // Render time is past the newest snapshot (a late packet): keep going at the last
+  // known velocity for a moment instead of freezing and then jumping.
+  if (p.count >= 2) {
+    const h = p.head
+    const o = (h - 1 + SNAPSHOTS) % SNAPSHOTS
+    const span = p.t[h] - p.t[o]
+    const ahead = Math.min(MAX_EXTRAPOLATE_MS, target - p.t[h])
+    if (span > 1 && ahead > 0 && p.t[h] <= target) {
+      const k = ahead / span
+      p.px = p.x[h] + (p.x[h] - p.x[o]) * k
+      p.py = p.y[h] + (p.y[h] - p.y[o]) * k
+      p.pz = p.z[h] + (p.z[h] - p.z[o]) * k
+      p.prot = p.r[h]
+      return
+    }
+  }
   // Walk back from the newest snapshot to find the pair around `target`.
   let newer = p.head
   for (let k = 0; k < p.count - 1; k += 1) {

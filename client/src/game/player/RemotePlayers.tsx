@@ -75,7 +75,8 @@ export function RemotePlayers() {
       const prevZ = p.pz
       sampleRemote(p, ms)
       const dist = Math.hypot(p.px - prevX, p.pz - prevZ)
-      p.speed = p.speed * 0.8 + (delta > 0 ? dist / delta : 0) * 0.2
+      // Smoothed over ~0.15 s whatever the frame rate, so the stride never stutters.
+      p.speed += ((delta > 0 ? dist / delta : 0) - p.speed) * (1 - Math.exp(-delta / 0.15))
       p.walkPhase += delta * (4 + p.speed)
       const walk = Math.min(1, p.speed / 6) * Math.sin(p.walkPhase * 2)
       const throwing = t - p.throwAt < THROW_ANIM_S

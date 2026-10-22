@@ -20,7 +20,7 @@ import {
   WALLS_PER_STAGE,
   winsMultiplier,
 } from '@game/shared'
-import { memo, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   type BufferGeometry,
   Color,
@@ -39,12 +39,16 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { serverNow, useGame } from '../../state/gameStore'
 import { useQuality } from '../../state/qualityStore'
 import { PropBuilder } from '../builder'
-import { now, wallFx } from '../runtime'
+import { now, wallFx, wallHold, wallHoldActive } from '../runtime'
 import { createStudTexture, createWorldBoxGeometry } from '../textures'
 import { createShatterGeometry, createShatterMaterial, SHATTER_TIME, type ShatterUniforms } from './wallShatter'
 import { createWallTexture, getCrackTexture } from './wallTextures'
 
 const MAX_WINDOW = 3
+/** Rebuilt walls rise over GROW_S, each starting GROW_STAGGER_S after the one before. */
+const GROW_S = 0.5
+const GROW_STAGGER_S = 0.12
+const GROW_TOTAL_S = GROW_S + GROW_STAGGER_S * 10
 const PAD_COLOR = '#2bff6a'
 const HIDDEN = new Matrix4().makeScale(0, 0, 0)
 const _o = new Object3D()
@@ -280,8 +284,29 @@ const StageWalls = memo(function StageWalls({ stage }: { stage: number }) {
     warm.current = 1
   }, [shatterMat, shatterUniforms])
 
-  const broken = stage < run.stage ? WALLS_PER_STAGE : stage === run.stage ? run.wallsBroken : 0
+  // Walls stay down for a few seconds after a win pad's trip to the lobby (wallHold),
+  // then rise again one after another.
+  // Mounted mid-hold (the stage window changes on the respawn): start held.
+  const [held, setHeld] = useState(() => wallHold.until !== 0)
+  useEffect(() => {
+    const on = () => setHeld(true)
+    wallHold.listeners.add(on)
+    return () => {
+      wallHold.listeners.delete(on)
+    }
+  }, [])
+  useEffect(() => {
+    if (!held) return
+    const id = window.setInterval(() => {
+      // Time's up, or the player is heading into the corridor: build them back now.
+      if (!wallHoldActive()) setHeld(false)
+    }, 200)
+    return () => window.clearInterval(id)
+  }, [held])
+  const downByHold = held && stage <= wallHold.stages
+  const broken = downByHold ? WALLS_PER_STAGE : stage < run.stage ? WALLS_PER_STAGE : stage === run.stage ? run.wallsBroken : 0
   const locked = stage > unlocked
+  const growStart = useRef(-10)
 
   // A wall the server just broke stays up until our boomerang reaches it, then shatters.
   const prevBroken = useRef(-1)
@@ -294,6 +319,8 @@ const StageWalls = memo(function StageWalls({ stage }: { stage: number }) {
     const mesh = ref.current
     if (!mesh) return
     const justBroke = prevBroken.current >= 0 && broken === prevBroken.current + 1 && stage === run.stage
+    // Every wall was down and now some stand: they grow back (see useFrame).
+    if (prevBroken.current === WALLS_PER_STAGE && broken < WALLS_PER_STAGE) growStart.current = now()
     prevBroken.current = broken
     pending.current.wall = justBroke ? broken - 1 : -1
     pending.current.since = now()
@@ -327,6 +354,24 @@ const StageWalls = memo(function StageWalls({ stage }: { stage: number }) {
       shatter.visible = true
       shatterStart.current = t
       p.wall = -1
+    }
+    // Walls rising from the floor, nearest first.
+    const g = t - growStart.current
+    if (g < GROW_TOTAL_S) {
+      for (let w = broken; w < WALLS_PER_STAGE; w += 1) {
+        const k = Math.min(1, Math.max(0, (g - w * GROW_STAGGER_S) / GROW_S))
+        const e = 1 - (1 - k) * (1 - k)
+        _o.position.set(0, (WALL_HEIGHT / 2) * Math.max(e, 0.001), wallZ(stage, w + 1))
+        _o.rotation.set(0, 0, 0)
+        _o.scale.set(1, Math.max(e, 0.001), 1)
+        _o.updateMatrix()
+        mesh.setMatrixAt(w, _o.matrix)
+      }
+      mesh.instanceMatrix.needsUpdate = true
+    } else if (growStart.current > 0) {
+      growStart.current = -10
+      for (let w = broken; w < WALLS_PER_STAGE; w += 1) mesh.setMatrixAt(w, placeAt(0, WALL_HEIGHT / 2, wallZ(stage, w + 1)))
+      mesh.instanceMatrix.needsUpdate = true
     }
     if (warm.current > 0) warm.current -= 1
     else if (shatter.visible) {

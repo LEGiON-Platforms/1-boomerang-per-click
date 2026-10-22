@@ -60,6 +60,7 @@ import {
   RARITIES,
   type Rarity,
   rarityIndex,
+  PAD_RESPAWN_MS,
   RECONNECT_SECONDS,
   redeemCode,
   rebirth,
@@ -97,9 +98,6 @@ export const CLOSE_DUPLICATE = 4100
 const RANGE_TOLERANCE = 3
 /** Corrections are only sent when the client is off by more than this. */
 const CORRECTION_DISTANCE = 1.0
-/** Celebration time on the win pad before the player respawns in the lobby. */
-const PAD_RESPAWN_MS = 1800
-
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max)
 const finite = (...v: unknown[]) => v.every((n) => typeof n === 'number' && Number.isFinite(n))
 
