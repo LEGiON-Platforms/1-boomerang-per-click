@@ -107,7 +107,7 @@ Wall HP grows by a factor that tapers from 21.9 (early stages) to 2.04 (late); a
 
 ## Multiplayer and anti-cheat
 
-Rooms of 8 (`joinOrCreate`, overflow opens a new room). The server runs every economy action through the same functions in `shared/src/logic/` the simulator uses, and validates input: a 12 throws/s token bucket, an 80 messages/s flood cap, movement speed (scaled by level) and walkable-area checks with rubber-banding, distance checks for the egg and pads, and corridor checks for wall damage. One live session per account (a new tab takes over the old one), 20 s reconnection window, autosave every 30 s.
+Rooms of 8 (`joinOrCreate`, overflow opens a new room). The server runs every economy action through the same functions in `shared/src/logic/` the simulator uses, and validates input: a 12 throws/s token bucket, an 80 messages/s flood cap, movement speed (scaled by level) and walkable-area checks with rubber-banding, distance checks for the egg and pads, and corridor checks for wall damage. One live session per account: a new tab or a refresh takes over at once, and the old avatar disappears right away instead of waiting out the 20 s reconnection window. Progress (Power, level, Wins, everything) is saved every 30 s, soon after purchases and when you leave, under the browser's guest id — come back days later in the same browser and you carry on where you stopped.
 
 ## Performance
 

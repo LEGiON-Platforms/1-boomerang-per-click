@@ -443,11 +443,19 @@ function poseLeftIdle(rig, time, w) {
   swing(rig, 'ArmL2', -0.75 * w)
 }
 
-/** Ready stance: each leg out to the side, and the knee bend (radians). */
-const STANCE_SPREAD = 0.4
-const STANCE_BEND = 0.12
-/** Height lost by two thigh-length segments spread and bent like that, per thigh length. */
-const STANCE_DROP = 2 * (1 - Math.cos(STANCE_SPREAD) * Math.cos(STANCE_BEND))
+/**
+ * Ready stance: each leg out to its own side (radians; on the legs a positive sway
+ * on LegL / negative on LegR is outwards — the opposite sign crosses them), and
+ * per leg [thigh swing, knee bend]: the left foot a little ahead, the right a
+ * little behind.
+ */
+const STANCE_SPREAD = 0.3
+const STANCE_L = [-0.3, 0.28]
+const STANCE_R = [0.14, 0.1]
+/** How far down a leg posed like that reaches, in thigh lengths (straight = 2). */
+const legReach = ([hip, knee]) => Math.cos(STANCE_SPREAD) * (Math.cos(hip) + Math.cos(hip + knee))
+/** The body drops until the longer leg's foot is on the floor. */
+const STANCE_DROP = 2 - Math.max(legReach(STANCE_L), legReach(STANCE_R))
 
 function poseBase(rig, motion) {
   const { time = 0, speed = 0, grounded = true, maxSpeed = 6, velY = 0 } = motion
@@ -476,12 +484,12 @@ function poseBase(rig, motion) {
   // breathing (the arms, one forward and one back, are posed by animateRig) --------
   if (ratio < 0.04) {
     const breath = Math.sin(time * 1.8)
-    sway(rig, 'LegL1', -STANCE_SPREAD)
-    sway(rig, 'LegR1', STANCE_SPREAD)
-    swing(rig, 'LegL1', -STANCE_BEND)
-    swing(rig, 'LegR1', -STANCE_BEND)
-    swing(rig, 'LegL2', STANCE_BEND * 2)
-    swing(rig, 'LegR2', STANCE_BEND * 2)
+    sway(rig, 'LegL1', STANCE_SPREAD)
+    sway(rig, 'LegR1', -STANCE_SPREAD)
+    swing(rig, 'LegL1', STANCE_L[0])
+    swing(rig, 'LegL2', STANCE_L[1])
+    swing(rig, 'LegR1', STANCE_R[0])
+    swing(rig, 'LegR2', STANCE_R[1])
     swing(rig, 'Spine1', -0.05 + breath * 0.015)
     // Spread legs reach less far down: lower the body so the feet stay on the floor.
     rig.root.position.y = rig.rootRestY - (rig.thigh ?? 0) * STANCE_DROP + breath * 0.02

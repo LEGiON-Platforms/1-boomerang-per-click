@@ -341,6 +341,29 @@ if (stepsArg === 'hold') {
   await shot(page, '31-flight')
 }
 
+if (stepsArg === 'refresh') {
+  // Progress survives a refresh, and the old session's avatar doesn't linger.
+  type G = { getState(): { power: number; xp: number; data: { wins: number } | null; roomPlayers: unknown[] } }
+  const snap = () =>
+    page.evaluate(() => {
+      const g = (window as unknown as { __bpcGame: G }).__bpcGame.getState()
+      return { power: Math.floor(g.power), xp: Math.floor(g.xp), wins: g.data?.wins ?? -1, players: g.roomPlayers.length }
+    })
+  await page.keyboard.press('Escape')
+  await clicks(page, 15, 110)
+  await sleep(1500)
+  const before = await snap()
+  console.log('before refresh:', JSON.stringify(before))
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.locator('.hud').waitFor({ timeout: 30000 })
+  await sleep(2500)
+  const after = await snap()
+  console.log('after refresh: ', JSON.stringify(after))
+  await shot(page, '47-after-refresh')
+  console.log(after.power >= before.power && after.xp >= before.xp && after.wins >= before.wins ? 'progress kept' : 'PROGRESS LOST')
+  console.log(after.players === before.players ? 'no leftover avatar' : `players before ${before.players}, after ${after.players}`)
+}
+
 if (stepsArg === 'banner') {
   // The win-pad "Stage Clear" banner (shown directly; the payout itself is untouched).
   await page.keyboard.press('Escape')

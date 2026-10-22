@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import type { Client } from '@colyseus/core'
+import type { Client, Deferred } from '@colyseus/core'
 import {
   createRun,
   type PlayerData,
@@ -60,6 +60,8 @@ export class PlayerSession {
   level: number
   /** Pending return to the lobby after a win pad. */
   respawnTimer: { clear(): void } | null = null
+  /** While dropped: the held reconnection (rejecting it ends the session now). */
+  reconnection: Deferred<Client> | null = null
 
   constructor(
     /** Replaced on reconnection. */

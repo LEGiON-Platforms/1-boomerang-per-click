@@ -1,4 +1,4 @@
-import { type Client, CloseCode, Room } from '@colyseus/core'
+import { type Client, CloseCode, Deferred, Room } from '@colyseus/core'
 import {
   addFriend,
   addPlaytime,
@@ -157,7 +157,15 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     activeSessions.set(id, {
       sessionId: client.sessionId,
-      kick: () => client.leave(CLOSE_DUPLICATE, 'Signed in from another tab'),
+      kick: () => {
+        // The old avatar goes at once: a refreshed tab's socket can take a while to
+        // close, and a dropped one would otherwise stand there for the whole
+        // reconnection window.
+        this.state.players.delete(client.sessionId)
+        const old = this.sessions.get(client.sessionId)
+        if (old?.reconnection) old.reconnection.reject(new Error('replaced by a newer session'))
+        else client.leave(CLOSE_DUPLICATE, 'Signed in from another tab')
+      },
     })
 
     this.sendWelcome(session)
@@ -173,12 +181,14 @@ export class GameRoom extends Room<{ state: GameState }> {
     if (code === CLOSE_DUPLICATE || code === CloseCode.SERVER_SHUTDOWN) return
     const s = this.sessions.get(client.sessionId)
     if (s) s.state.anim = ANIM.idle
-    this.allowReconnection(client, RECONNECT_SECONDS)
+    const held = this.allowReconnection(client, RECONNECT_SECONDS)
+    if (s && held instanceof Deferred) s.reconnection = held
   }
 
   onReconnect(client: Client): void {
     const s = this.sessions.get(client.sessionId)
     if (!s) return
+    s.reconnection = null
     s.client = client
     this.sendWelcome(s)
   }
