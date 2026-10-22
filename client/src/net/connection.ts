@@ -64,6 +64,12 @@ export function getRoom(): Room | null {
   return room
 }
 
+// Dev-only hook for tools/shot.ts to jump straight into a stage.
+if (import.meta.env.DEV) {
+  ;(window as unknown as { __bpcTeleport: (s: number) => void }).__bpcTeleport = (stage) =>
+    send(C2S.teleportStage, { stage })
+}
+
 /** Sends a message to the game room (dropped while disconnected). */
 export function send(type: string, payload?: unknown): void {
   room?.send(type, payload)

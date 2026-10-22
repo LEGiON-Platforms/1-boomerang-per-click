@@ -44,6 +44,9 @@ export const cameraState = {
   snap: true,
 }
 
+/** Clock time of the last hit on the active wall (for its shake). */
+export const wallFx = { hitAt: -10 }
+
 /** Auto Win steering: the controller walks towards (x, z) when there's no manual input. */
 export const autopilot = { active: false, x: 0, z: 0 }
 

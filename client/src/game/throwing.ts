@@ -1,6 +1,7 @@
 import {
   C2S,
   clickGainFor,
+  formatGain,
   formatNumber,
   isPadUnlocked,
   padAtPosition,
@@ -22,7 +23,7 @@ import type { RemotePlayer } from '../net/remote'
 import { game, serverNow, useGame } from '../state/gameStore'
 import { spawnFloat } from '../ui/floating'
 import { IMPACT, launch, resolveImpact } from './fx/projectiles'
-import { localPlayer, now } from './runtime'
+import { localPlayer, now, wallFx } from './runtime'
 
 /** Just under the server's 12/s cap so normal spam-clicking is never refused. */
 const MIN_INTERVAL_MS = 1000 / 11
@@ -96,7 +97,7 @@ export function requestThrow(): boolean {
   const t = computeTarget()
   const gain = clickGainFor(g.data, { padId: t.pad, friendsInRoom: friendsInRoom(), now: serverNow() })
   useGame.getState().setPowerWins(g.power + gain)
-  spawnFloat(`+${formatNumber(gain)}`, '#ffffff')
+  spawnFloat(`+${formatGain(gain)}`, '#ffffff')
 
   const lp = localPlayer
   lp.throwAt = now()
@@ -130,6 +131,7 @@ export function onThrowResult(m: ThrowResultMsg): void {
     const color = stageDef(stage).color
     const at = { x: Math.max(-6, Math.min(6, localPlayer.pos.x)), y: 2.6, z: wallZ(stage, m.hit.wall) + WALL_THICKNESS / 2 }
     resolveImpact('local', m.s, IMPACT.wall, at, color, m.hit.broken)
+    if (!m.hit.broken) wallFx.hitAt = now()
     if (m.hit.winsGained > 0) spawnFloat(`+${formatNumber(m.hit.winsGained)} Wins`, '#ffe14a', 50, 62, true)
   } else if (m.t === TARGET.dummy && m.pad !== undefined) {
     const dummy = TRAINING_PAD_SPOTS[m.pad].dummy

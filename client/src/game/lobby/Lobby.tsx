@@ -29,7 +29,7 @@ import { EggBlocks } from './EggBlocks'
 import { Leaderboards } from './Leaderboards'
 import { LobbySigns } from './LobbySigns'
 
-/** Cliff tiers around the lobby: [inner offset, outer offset, height]. */
+/** Cliff tiers around the lobby's west, east and south: [inner offset, outer offset, height]. */
 const TIERS: [number, number, number][] = [
   [0, 6, 6],
   [6, 14, 12],
@@ -50,11 +50,18 @@ function cliffBoxes(): [number, number, number, number, number][] {
     out.push([maxX + a + t / 2, (minZ + maxZ) / 2, t, maxZ - minZ + extra * 2, h])
     // South (behind the leaderboards).
     out.push([0, maxZ + a + t / 2, maxX - minX + extra * 2, t, h])
-    // North, either side of the corridor gate.
-    const gateHalf = 8
-    const span = maxX - gateHalf + extra
-    out.push([-(gateHalf + span / 2), minZ - a - t / 2, span, t, h])
-    out.push([gateHalf + span / 2, minZ - a - t / 2, span, t, h])
+  }
+  // North, either side of the gate. The corridor's own cliffs (x 8..20) begin at
+  // z = -4, so these stop where they start instead of overlapping them.
+  // Stop at the lobby edge, where the west/east cliffs (which run past z = 0) take over.
+  const outer = maxX
+  const ledge = (x0: number) => [x0 + (outer - x0) / 2, -2, outer - x0, 4, 6] as [number, number, number, number, number]
+  const back = (x0: number) => [x0 + (outer - x0) / 2, -9, outer - x0, 10, 12] as [number, number, number, number, number]
+  for (const side of [-1, 1]) {
+    const l = ledge(8)
+    const b = back(20)
+    out.push([side * l[0], l[1], l[2], l[3], l[4]])
+    out.push([side * b[0], b[1], b[2], b[3], b[4]])
   }
   return out
 }
@@ -197,9 +204,11 @@ export function Lobby() {
   }, [texSize])
 
   const geometries = useMemo(() => {
-    const { minX, maxX, minZ, maxZ } = LOBBY
-    const floor = createWorldBoxGeometry(maxX - minX, 1, maxZ - minZ, STUD_TILE)
-    floor.translate((minX + maxX) / 2, -0.5, (minZ + maxZ) / 2)
+    const { minX, maxX, maxZ } = LOBBY
+    // Starts at z = -4 so it meets stage 1's floor with no gap under the gate.
+    const floorMinZ = -4
+    const floor = createWorldBoxGeometry(maxX - minX, 1, maxZ - floorMinZ, STUD_TILE)
+    floor.translate((minX + maxX) / 2, -0.5, (floorMinZ + maxZ) / 2)
     const field = createWorldPlaneGeometry(700, 700, STUD_TILE)
     field.rotateX(-Math.PI / 2)
     field.translate(0, -0.3, 0)

@@ -91,6 +91,9 @@ function tick(): void {
   const nearInteract = findInteract()
   const patch: Partial<ReturnType<typeof game>> = {}
   if (stageHere !== g.stageHere) patch.stageHere = stageHere
+  // Hysteresis so walking back and forth at the gate doesn't remount the corridor.
+  const nearCorridor = g.nearCorridor ? p.z < 40 : p.z < 20
+  if (nearCorridor !== g.nearCorridor) patch.nearCorridor = nearCorridor
   if (onPad !== g.onPad) patch.onPad = onPad
   if (!sameTarget(nearInteract, g.nearInteract)) patch.nearInteract = nearInteract
 

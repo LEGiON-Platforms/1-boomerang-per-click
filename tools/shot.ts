@@ -93,6 +93,20 @@ if (stepsArg === 'stage' || stepsArg === 'all') {
   await shot(page, '04-stage-walls')
 }
 
+if (stepsArg === 'clear' || stepsArg === 'all') {
+  // Keep throwing and walking until the tutorial says the walls are down.
+  for (let i = 0; i < 40; i += 1) {
+    if (await page.getByText('Collect your Wins!').isVisible().catch(() => false)) break
+    await clicks(page, 3, 110)
+    await hold(page, 'w', 350)
+  }
+  await page.keyboard.down('Shift')
+  await hold(page, 'w', 9000)
+  await page.keyboard.up('Shift')
+  await sleep(1200)
+  await shot(page, '05-stage-clear')
+}
+
 const info = await page.evaluate(() => window.__bpcRenderInfo?.() ?? null)
 console.log('render info', JSON.stringify(info))
 console.log(errors.length ? `console errors/warnings:\n${errors.slice(0, 30).join('\n')}` : 'no console errors')

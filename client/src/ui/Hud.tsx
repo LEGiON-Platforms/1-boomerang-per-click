@@ -2,6 +2,8 @@ import { HudBottom, HudBottomLeft } from './hud/HudBottom'
 import { HudLeft } from './hud/HudLeft'
 import { HudOffers, HudTopRight } from './hud/HudRight'
 import { HudTop } from './hud/HudTop'
+import { HudTopLeft } from './hud/HudTopLeft'
+import { StageClear } from './overlays/StageClear'
 import { PanelHost } from './PanelHost'
 import { ConfirmDialog, Toasts } from './Toasts'
 
@@ -10,12 +12,14 @@ export function Hud() {
   return (
     <div className="hud">
       <HudTop />
+      <HudTopLeft />
       <HudLeft />
       <HudOffers />
       <HudTopRight />
       <HudBottom />
       <HudBottomLeft />
       <Toasts />
+      <StageClear />
       <PanelHost />
       <ConfirmDialog />
     </div>

@@ -27,6 +27,15 @@ export function formatNumber(value: number): string {
   return sign + text + SUFFIXES[tier]
 }
 
+/** Like formatNumber, but keeps one decimal for small fractional gains: 1.25 → "1.2". */
+export function formatGain(value: number): string {
+  if (value < 10 && value % 1 !== 0) {
+    const t = Math.floor(value * 10) / 10
+    return t % 1 === 0 ? t.toFixed(0) : t.toFixed(1)
+  }
+  return formatNumber(value)
+}
+
 /** Thousands separators, for exact counts in UI copy: 25000 → "25,000". */
 export function formatInt(value: number): string {
   return Math.floor(value).toLocaleString('en-US')

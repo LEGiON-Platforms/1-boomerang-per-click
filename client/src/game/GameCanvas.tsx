@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import type { PerspectiveCamera, WebGLRenderer } from 'three'
 
+import { useGame } from '../state/gameStore'
 import { useQuality } from '../state/qualityStore'
 import { BoomerangInstances } from './fx/BoomerangInstances'
 import { ParticleSystem } from './fx/ParticleSystem'
@@ -13,6 +14,9 @@ import { LocalPlayer } from './player/LocalPlayer'
 import { RemotePlayers } from './player/RemotePlayers'
 import { FOG, SKY } from './sceneStyle'
 import { Sky } from './Sky'
+
+// Stages load on demand (React.lazy): the lobby is playable before this chunk exists.
+const StageCorridor = lazy(() => import('./corridor/StageCorridor'))
 
 // Dev-only overlay: the static DEV check lets the production build drop r3f-perf.
 const PerfOverlay = import.meta.env.DEV
@@ -58,6 +62,7 @@ export function GameCanvas({ onAvatarReady, onFirstFrame, children }: Props) {
   const settings = useQuality((s) => s.settings)
   const showPerf = useQuality((s) => s.showPerf)
   const drop = useQuality((s) => s.drop)
+  const nearCorridor = useGame((s) => s.nearCorridor)
   // Remounting the Canvas is the reliable way back from a lost WebGL context.
   const [canvasKey, setCanvasKey] = useState(0)
   const [contextLost, setContextLost] = useState(false)
@@ -101,6 +106,11 @@ export function GameCanvas({ onAvatarReady, onFirstFrame, children }: Props) {
         <Sky />
         <Lighting />
         <Lobby />
+        {nearCorridor && (
+          <Suspense fallback={null}>
+            <StageCorridor />
+          </Suspense>
+        )}
         <Suspense fallback={null}>
           <LocalPlayer onAvatarReady={onAvatarReady} />
         </Suspense>

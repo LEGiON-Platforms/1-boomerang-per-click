@@ -5,6 +5,7 @@ import {
   C2S,
   clickGainFor,
   EGGS,
+  formatGain,
   formatNumber,
   formatTimer,
   friendBoostFraction,
@@ -57,7 +58,7 @@ function QuickTrain() {
               else ui().toast(`Unlocks at Rebirth ${pad.requiredRebirths}`, 'error')
             }}
           >
-            <span className="txt-outline">{unlocked ? `+${formatNumber(gain)}` : <LockIcon size={40} />}</span>
+            <span className="txt-outline">{unlocked ? `+${formatGain(gain)}` : <LockIcon size={40} />}</span>
             <span className="tag txt-outline" style={{ color: unlocked ? '#7dff6b' : '#ff6b6b' }}>
               {pad.requiredRebirths > 0 && <RebirthIcon size={22} />}
               {unlocked ? `x${pad.mult}` : pad.requiredRebirths}
