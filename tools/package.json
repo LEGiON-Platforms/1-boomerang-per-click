@@ -1,0 +1,21 @@
+{
+  "name": "tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Balance simulator, multiplayer bot test and perf probe",
+  "type": "module",
+  "scripts": {
+    "simulate": "tsx simulate.ts",
+    "bots": "tsx bots.ts",
+    "perf": "tsx perf-probe.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@colyseus/sdk": "^0.18.5",
+    "@game/shared": "*",
+    "@types/node": "^24.0.0",
+    "playwright-core": "^1.64.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

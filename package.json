@@ -1,0 +1,29 @@
+{
+  "name": "boomerang-per-click",
+  "private": true,
+  "version": "1.0.0",
+  "description": "+1 Boomerang Per Click — multiplayer web clone (R3F + Colyseus)",
+  "workspaces": [
+    "shared",
+    "server",
+    "client",
+    "tools"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build -w server && npm run build -w client",
+    "start": "npm run start -w server",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w server && npm run typecheck -w client && npm run typecheck -w tools",
+    "simulate": "npm run simulate -w tools --",
+    "test:bots": "npm run bots -w tools --",
+    "perf": "npm run perf -w tools --"
+  },
+  "overrides": {
+    "r3f-perf": {
+      "@react-three/drei": "^10.7.9"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
