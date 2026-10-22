@@ -39,7 +39,7 @@ import { flyTrophies } from '../ui/floating'
 import { waitForSDK } from '../bloxity/sdk'
 import { getBloxityState, useBloxityStore } from '../bloxity/store'
 import { getPlayerId } from './identity'
-import { addRemote, clearRemotes, createRemote, pushSnapshot, removeRemote } from './remote'
+import { addRemote, clearRemotes, createRemote, pushSnapshot, remotePlayers, removeRemote } from './remote'
 
 /** Mirrors the server's CLOSE_DUPLICATE. */
 const CLOSE_DUPLICATE = 4100
@@ -128,7 +128,7 @@ if (import.meta.env.DEV) {
   w.__bpcSend = (type, payload) => send(type, payload)
   ;(window as unknown as { __bpcUI: typeof useUI }).__bpcUI = useUI
   ;(window as unknown as { __bpcGame: typeof useGame }).__bpcGame = useGame
-  ;(window as unknown as { __bpcRuntime: object }).__bpcRuntime = { localPlayer, cameraState, devPose }
+  ;(window as unknown as { __bpcRuntime: object }).__bpcRuntime = { localPlayer, cameraState, devPose, remotePlayers }
 }
 
 /** Sends a message to the game room (dropped while disconnected). */

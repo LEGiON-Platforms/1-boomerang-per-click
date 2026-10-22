@@ -14,8 +14,15 @@ import type { PetInstance, PlayerData } from './types'
 
 export const ROOM_NAME = 'game'
 export const MAX_CLIENTS = 8
+/** Delay (ms) between claiming a win pad and being sent back to the lobby. */
+export const PAD_RESPAWN_MS = 1800
+/**
+ * Time (ms) in the lobby after which a player's broken walls are rebuilt: the run
+ * restarts at stage 1 (whether they came back by a win pad, on foot or by teleport).
+ */
+export const LOBBY_RESET_MS = 6000
 /** Client → server position updates per second. */
-export const MOVE_RATE_HZ = 10
+export const MOVE_RATE_HZ = 20
 /** Seconds the server holds a dropped player's seat. */
 export const RECONNECT_SECONDS = 20
 

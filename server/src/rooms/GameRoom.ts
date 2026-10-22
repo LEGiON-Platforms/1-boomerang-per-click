@@ -20,6 +20,7 @@ import {
   collectPumpkin,
   constrainPosition,
   createRun,
+  runHasProgress,
   deletePet,
   distance2D,
   EGG_SPOTS,
@@ -60,6 +61,8 @@ import {
   RARITIES,
   type Rarity,
   rarityIndex,
+  LOBBY_RESET_MS,
+  PAD_RESPAWN_MS,
   RECONNECT_SECONDS,
   redeemCode,
   rebirth,
@@ -97,9 +100,6 @@ export const CLOSE_DUPLICATE = 4100
 const RANGE_TOLERANCE = 3
 /** Corrections are only sent when the client is off by more than this. */
 const CORRECTION_DISTANCE = 1.0
-/** Celebration time on the win pad before the player respawns in the lobby. */
-const PAD_RESPAWN_MS = 1800
-
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max)
 const finite = (...v: unknown[]) => v.every((n) => typeof n === 'number' && Number.isFinite(n))
 
@@ -119,6 +119,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     this.registerHandlers()
 
     this.clock.setInterval(() => this.tickSecond(), 1000)
+    this.clock.setInterval(() => this.lobbyResets(), 500)
     this.clock.setInterval(() => this.flushSync(), 2000)
     this.clock.setInterval(() => this.autosave(), CONFIG.autosaveSeconds * 1000)
     this.unsubscribeBoards = leaderboards.subscribe((boards) => this.broadcast(S2C.leaderboards, boards))
@@ -251,6 +252,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     s.state.z = z
     s.state.rotY = rotY
     s.state.stage = stageAtZ(z)
+    s.lobbySince = s.state.stage === 0 ? Date.now() : 0
     s.teleportUntil = Date.now() + 1000
     s.client.send(S2C.teleport, { x, z, rotY })
   }
@@ -356,14 +358,12 @@ export class GameRoom extends Room<{ state: GameState }> {
       s.client.send(S2C.padClaimed, { stage: s.run.stage, wins: r.wins })
       this.sendRun(s)
       this.changed(s)
-      // After a short celebration: back to the lobby, where every wall stands again
-      // (the run restarts at stage 1; Settings → Stages jumps further).
+      // After a short celebration: back to the lobby. The walls are rebuilt once the
+      // player has been there LOBBY_RESET_MS (lobbyResets); Settings → Stages jumps further.
       s.respawnTimer?.clear()
       s.respawnTimer = this.clock.setTimeout(() => {
         s.respawnTimer = null
-        s.run = createRun(1)
         this.teleport(s, SPAWN.x, SPAWN.z, SPAWN.rotY)
-        this.sendRun(s)
       }, PAD_RESPAWN_MS)
     })
 
@@ -590,6 +590,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     ps.rotY = m.r
     ps.anim = clamp(Math.floor(m.a), 0, ANIM.jump)
     ps.stage = stageAtZ(c.z)
+    if (ps.stage !== 0) s.lobbySince = 0
+    else if (s.lobbySince === 0) s.lobbySince = now
     // Walking through an open gate into the next stage moves the run on to it.
     if (s.run.wallsBroken >= WALLS_PER_STAGE && s.run.stage < STAGE_COUNT && ps.stage === s.run.stage + 1) {
       s.run = createRun(s.run.stage + 1)
@@ -684,6 +686,16 @@ export class GameRoom extends Room<{ state: GameState }> {
 
   private flushSync(): void {
     for (const s of this.sessions.values()) if (s.syncDirty) this.sendSelf(s)
+  }
+
+  /** Players who have spent LOBBY_RESET_MS in the lobby get their walls back. */
+  private lobbyResets(): void {
+    const now = Date.now()
+    for (const s of this.sessions.values()) {
+      if (s.lobbySince === 0 || now - s.lobbySince < LOBBY_RESET_MS || !runHasProgress(s.run)) continue
+      s.run = createRun(1)
+      this.sendRun(s)
+    }
   }
 
   private autosave(): void {

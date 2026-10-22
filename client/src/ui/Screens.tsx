@@ -152,6 +152,23 @@ export function MobileControls() {
       >
         <EquippedBoomerang size={70} />
       </button>
+      {/* Held like the Space key: jumps again on landing while the finger stays down. */}
+      <button
+        type="button"
+        className="btn3d jump-btn bg-cyan"
+        aria-label="Jump"
+        onPointerDown={(e) => {
+          unlockAudio()
+          e.currentTarget.setPointerCapture(e.pointerId)
+          input.jump = true
+        }}
+        onPointerUp={() => (input.jump = false)}
+        onPointerCancel={() => (input.jump = false)}
+      >
+        <svg viewBox="0 0 64 64" width={46} height={46} aria-hidden>
+          <path d="M32 8 L56 34 H42 V56 H22 V34 H8 Z" fill="#fff" stroke="#1b1b22" strokeWidth="5" strokeLinejoin="round" />
+        </svg>
+      </button>
     </>
   )
 }

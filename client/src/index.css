@@ -624,6 +624,21 @@ canvas,
   pointer-events: auto;
 }
 
+/* Jump: up and to the left of THROW, where the right thumb reaches it. */
+.jump-btn {
+  position: absolute;
+  right: 172px;
+  bottom: 110px;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  z-index: 15;
+  touch-action: none;
+  pointer-events: auto;
+}
+
 /* ---------------------------------------------------------------------------
  * Touch layout: room for the stick (bottom-left) and THROW (bottom-right)
  * ------------------------------------------------------------------------- */
@@ -668,6 +683,12 @@ canvas,
   bottom: 18px;
   width: 112px;
   height: 112px;
+}
+.touch .jump-btn {
+  right: 46px;
+  bottom: 146px;
+  width: 80px;
+  height: 80px;
 }
 
 @media (prefers-reduced-motion: reduce) {

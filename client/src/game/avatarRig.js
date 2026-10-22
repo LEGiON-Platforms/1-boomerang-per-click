@@ -500,7 +500,13 @@ function poseBase(rig, motion) {
   // Step frequency follows the actual speed (level bonuses included) so a fast
   // runner never looks like a moonwalk; the swing amplitude caps at a full run.
   const stride = Math.min(speed / Math.max(maxSpeed, 0.001), 1.7)
-  const phase = time * (5 + stride * 5)
+  // Integrated, not time × frequency: other players' speed is an estimate that
+  // wobbles a little every frame, and time × a wobbling frequency jumps the legs
+  // to a random point in the stride. (Skipped frames come back in as a longer dt.)
+  const dt = Math.min(0.25, Math.max(0, time - (rig.walkTime ?? time)))
+  rig.walkTime = time
+  rig.walkPhase = ((rig.walkPhase ?? 0) + dt * (5 + stride * 5)) % (Math.PI * 2)
+  const phase = rig.walkPhase
   const cycle = Math.sin(phase)
   const legAmp = 0.85 * ratio
   const armAmp = 0.7 * ratio

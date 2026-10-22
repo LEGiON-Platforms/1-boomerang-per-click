@@ -6,7 +6,7 @@ import { type Bone, type Group, Vector3 } from 'three'
 import { type AvatarRig, PlayerAvatar } from '../../bloxity/session'
 import { remotePlayers } from '../../net/remote'
 import { useGame } from '../../state/gameStore'
-import { CATCH_ANIM_S, now, THROW_ANIM_S } from '../runtime'
+import { CATCH_ANIM_S, localPlayer, now, THROW_ANIM_S } from '../runtime'
 import { PLAYER_HEIGHT } from './LocalPlayer'
 
 /**
@@ -19,6 +19,8 @@ const RemoteAvatar = memo(function RemoteAvatar({ id, avatar }: { id: string; av
   const look = useMemo(() => parseAvatarLook(avatar), [avatar])
   const motionRef = useRef({ time: 0, speed: 0, grounded: true, maxSpeed: MOVE_SPEED * SPRINT_MULT, velY: 0, throwPhase: -1, catchPhase: -1 })
   const handRef = useRef<Bone | null>(null)
+  /** Pose the rig less often the further away the player is (see PlayerAvatar). */
+  const skipRef = useRef(0)
   const handLocal = useMemo(() => new Vector3(), [])
 
   const onRig = useCallback(
@@ -39,6 +41,8 @@ const RemoteAvatar = memo(function RemoteAvatar({ id, avatar }: { id: string; av
     if (!p || !root) return
     root.position.set(p.px, p.py, p.pz)
     root.rotation.y = p.prot
+    const far = Math.hypot(p.px - localPlayer.pos.x, p.pz - localPlayer.pos.z)
+    skipRef.current = far > 60 ? 4 : far > 30 ? 2 : 0
     const m = motionRef.current
     const t = now()
     m.time += delta
@@ -57,7 +61,7 @@ const RemoteAvatar = memo(function RemoteAvatar({ id, avatar }: { id: string; av
   return (
     <group ref={rootRef}>
       <Suspense fallback={null}>
-        <PlayerAvatar look={look} onRig={onRig} targetHeight={PLAYER_HEIGHT} motionRef={motionRef} />
+        <PlayerAvatar look={look} onRig={onRig} targetHeight={PLAYER_HEIGHT} motionRef={motionRef} skipRef={skipRef} />
       </Suspense>
     </group>
   )

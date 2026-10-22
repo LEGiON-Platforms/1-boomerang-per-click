@@ -45,6 +45,10 @@ import { createShatterGeometry, createShatterMaterial, SHATTER_TIME, type Shatte
 import { createWallTexture, getCrackTexture } from './wallTextures'
 
 const MAX_WINDOW = 3
+/** Rebuilt walls rise over GROW_S, each starting GROW_STAGGER_S after the one before. */
+const GROW_S = 0.5
+const GROW_STAGGER_S = 0.12
+const GROW_TOTAL_S = GROW_S + GROW_STAGGER_S * 10
 const PAD_COLOR = '#2bff6a'
 const HIDDEN = new Matrix4().makeScale(0, 0, 0)
 const _o = new Object3D()
@@ -282,6 +286,9 @@ const StageWalls = memo(function StageWalls({ stage }: { stage: number }) {
 
   const broken = stage < run.stage ? WALLS_PER_STAGE : stage === run.stage ? run.wallsBroken : 0
   const locked = stage > unlocked
+  // Walls that come back (the run restarted after a while in the lobby) grow out of
+  // the floor one after another: walls from..to-1, starting at `start`.
+  const grow = useRef({ start: -10, from: 0, to: 0 })
 
   // A wall the server just broke stays up until our boomerang reaches it, then shatters.
   const prevBroken = useRef(-1)
@@ -294,6 +301,11 @@ const StageWalls = memo(function StageWalls({ stage }: { stage: number }) {
     const mesh = ref.current
     if (!mesh) return
     const justBroke = prevBroken.current >= 0 && broken === prevBroken.current + 1 && stage === run.stage
+    if (prevBroken.current > broken) {
+      grow.current.start = now()
+      grow.current.from = broken
+      grow.current.to = prevBroken.current
+    }
     prevBroken.current = broken
     pending.current.wall = justBroke ? broken - 1 : -1
     pending.current.since = now()
@@ -327,6 +339,25 @@ const StageWalls = memo(function StageWalls({ stage }: { stage: number }) {
       shatter.visible = true
       shatterStart.current = t
       p.wall = -1
+    }
+    // Walls rising from the floor, nearest first.
+    const gr = grow.current
+    const g = t - gr.start
+    if (g < GROW_TOTAL_S) {
+      for (let w = gr.from; w < gr.to; w += 1) {
+        const k = Math.min(1, Math.max(0, (g - (w - gr.from) * GROW_STAGGER_S) / GROW_S))
+        const e = 1 - (1 - k) * (1 - k)
+        _o.position.set(0, (WALL_HEIGHT / 2) * Math.max(e, 0.001), wallZ(stage, w + 1))
+        _o.rotation.set(0, 0, 0)
+        _o.scale.set(1, Math.max(e, 0.001), 1)
+        _o.updateMatrix()
+        mesh.setMatrixAt(w, _o.matrix)
+      }
+      mesh.instanceMatrix.needsUpdate = true
+    } else if (gr.start > 0) {
+      gr.start = -10
+      for (let w = gr.from; w < gr.to; w += 1) mesh.setMatrixAt(w, placeAt(0, WALL_HEIGHT / 2, wallZ(stage, w + 1)))
+      mesh.instanceMatrix.needsUpdate = true
     }
     if (warm.current > 0) warm.current -= 1
     else if (shatter.visible) {
