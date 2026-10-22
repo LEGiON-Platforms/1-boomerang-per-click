@@ -6,8 +6,7 @@ import {
   ANIM,
   applyThrowGain,
   bestBoomerangId,
-  bestUnlockedEgg,
-  buyGemItem,
+  buyPerk,
   buyNextBoomerang,
   buyTrail,
   C2S,
@@ -16,6 +15,7 @@ import {
   claimGift,
   claimPad,
   claimQuest,
+  grantLuckyReward,
   collectPumpkin,
   constrainPosition,
   createRun,
@@ -29,8 +29,8 @@ import {
   equippedPetInstances,
   equipTrail,
   type ErrorCode,
-  type GemItemId,
-  GEM_SHOP,
+  type PerkId,
+  PERK_SHOP,
   grantOfflineEarnings,
   HALLOWEEN,
   hitWall,
@@ -51,7 +51,6 @@ import {
   openEgg,
   type OpenEggMsg,
   padAtPosition,
-  PET_BY_ID,
   PLAYER_ID_PATTERN,
   playerLevel,
   PLAYTIME_GIFTS,
@@ -68,10 +67,11 @@ import {
   type RewardSummary,
   rollTutorialReward,
   S2C,
+  sanitizeAvatarLook,
   sanitizeName,
   SPAWN,
   STAGE_COUNT,
-  stageAtZ,
+  inCorridor,
   stageSpawn,
   TARGET,
   THROW,
@@ -226,10 +226,6 @@ export class GameRoom extends Room<{ state: GameState }> {
 
   private reward(s: PlayerSession, source: RewardSource, title: string, reward: RewardSummary): void {
     s.client.send(S2C.reward, { source, title, reward })
-    // A free egg inside a reward gets the full hatch animation too.
-    if (reward.eggId) {
-      s.client.send(S2C.eggResult, { egg: reward.eggId, pets: reward.pets, vip: reward.vip, free: true })
-    }
   }
 
   private teleport(s: PlayerSession, x: number, z: number, rotY: number): void {
@@ -241,7 +237,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     s.state.y = 0
     s.state.z = z
     s.state.rotY = rotY
-    s.state.stage = stageAtZ(z)
+    s.state.stage = inCorridor(z) ? s.run.stage : 0
     s.teleportUntil = Date.now() + 1000
     s.client.send(S2C.teleport, { x, z, rotY })
   }
@@ -455,14 +451,14 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     this.on<{ index: number }>(C2S.claimGift, (s, m) => {
       const index = Math.floor(Number(m?.index))
-      const r = claimGift(s.data, index, Math.random, Date.now())
+      const r = claimGift(s.data, index, Date.now())
       if (!r.ok) return this.error(s, r.error)
       this.reward(s, 'gift', `${PLAYTIME_GIFTS[index].minutes} Minute Gift`, r.reward)
       this.changed(s)
     })
 
     this.on(C2S.claimDaily, (s) => {
-      const r = claimDaily(s.data, Math.random, Date.now())
+      const r = claimDaily(s.data, Date.now())
       if (!r.ok) return this.error(s, r.error)
       this.reward(s, 'daily', `Day ${r.day} Reward`, r.reward)
       this.changed(s)
@@ -470,26 +466,26 @@ export class GameRoom extends Room<{ state: GameState }> {
 
     this.on<{ id: string }>(C2S.claimQuest, (s, m) => {
       const id = String(m?.id)
-      const r = claimQuest(s.data, id, Math.random, Date.now())
+      const r = claimQuest(s.data, id, Date.now())
       if (!r.ok) return this.error(s, r.error)
       this.reward(s, 'quest', questDef(id)?.title ?? 'Quest', r.reward)
       this.changed(s)
     })
 
     this.on<{ code: string }>(C2S.redeemCode, (s, m) => {
-      const r = redeemCode(s.data, String(m?.code ?? ''), Math.random, Date.now())
+      const r = redeemCode(s.data, String(m?.code ?? ''), Date.now())
       if (!r.ok) return this.error(s, r.error)
       this.reward(s, 'code', `Code ${r.code}`, r.reward)
       this.changed(s)
     })
 
-    this.on<{ item: GemItemId }>(C2S.buyGemItem, (s, m) => {
+    this.on<{ item: PerkId }>(C2S.buyPerk, (s, m) => {
       const item = m?.item
-      if (!item || !(item in GEM_SHOP)) return this.error(s, 'not_found')
-      const r = buyGemItem(s.data, item, Math.random, Date.now())
+      if (!item || !(item in PERK_SHOP)) return this.error(s, 'not_found')
+      const r = buyPerk(s.data, item, Date.now())
       if (!r.ok) return this.error(s, r.error)
-      s.client.send(S2C.purchase, { kind: 'gem', id: item })
-      if (r.reward) this.reward(s, 'gem', GEM_SHOP[item].name, r.reward)
+      s.client.send(S2C.purchase, { kind: 'perk', id: item })
+      if (r.reward) this.reward(s, 'perk', PERK_SHOP[item].name, r.reward)
       this.changed(s)
     })
 
@@ -517,6 +513,12 @@ export class GameRoom extends Room<{ state: GameState }> {
     this.on<{ pid: string }>(C2S.removeFriend, (s, m) => {
       removeFriend(s.data, String(m?.pid ?? ''))
       this.changed(s)
+    })
+
+    this.on<{ look: unknown }>(C2S.setAvatar, (s, m) => {
+      const look = sanitizeAvatarLook(m?.look)
+      const ps = this.state.players.get(s.client.sessionId)
+      if (ps && ps.avatar !== look && look.length <= 1024) ps.avatar = look
     })
 
     this.on<{ name: string }>(C2S.setName, (s, m) => {
@@ -567,7 +569,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     ps.z = c.z
     ps.rotY = m.r
     ps.anim = clamp(Math.floor(m.a), 0, ANIM.jump)
-    ps.stage = stageAtZ(c.z)
+    ps.stage = inCorridor(c.z) ? s.run.stage : 0
     if (corrected) this.teleport(s, c.x, c.z, m.r)
   }
 
@@ -584,7 +586,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     if (padId >= 0) {
       result.t = TARGET.dummy
       result.pad = padId
-    } else if (stageAtZ(s.pos.z) === s.run.stage && s.run.wallsBroken < WALLS_PER_STAGE) {
+    } else if (inCorridor(s.pos.z) && s.run.wallsBroken < WALLS_PER_STAGE) {
       // Only the active stage's next wall, and only when it is in front and in reach.
       const distance = s.pos.z - wallZ(s.run.stage, s.run.wallsBroken + 1)
       if (distance >= -1 && distance <= THROW.range + RANGE_TOLERANCE) {
@@ -615,33 +617,11 @@ export class GameRoom extends Room<{ state: GameState }> {
     lucky.phase = LUCKY_PHASE.countdown
     lucky.secondsLeft = LUCKY_BLOCK.intervalSeconds
 
-    const egg = bestUnlockedEgg(s.data)
-    const r = openEgg(s.data, egg.id, 1, Math.random, { free: true })
-    let petName = ''
-    let rarity: Rarity | null = null
-    let vip = false
-    if (r.ok) {
-      vip = r.vip
-      const pet = r.pets[0]
-      if (pet) {
-        petName = PET_BY_ID[pet.petId]?.name ?? ''
-        rarity = pet.rarity
-      }
-      s.client.send(S2C.eggResult, { egg: egg.id, pets: r.pets, vip: r.vip, free: true })
-    } else {
-      // Inventory full: pay out gems instead so the find still feels rewarding.
-      s.data.gems += 10
-      this.reward(s, 'lucky', 'Lucky Block!', {
-        wins: 0,
-        gems: 10,
-        pumpkins: 0,
-        boosts: [],
-        pets: [],
-        vip: false,
-        convertedGems: 10,
-      })
-    }
-    this.broadcast(S2C.luckyWinner, { name: s.data.name, petName, rarity, vip })
+    // Pets only come from the Halloween Egg: a Lucky Block pays Wins and a boost,
+    // with a small chance at the VIP boomerang.
+    const reward = grantLuckyReward(s.data, Math.random, Date.now())
+    this.reward(s, 'lucky', 'Lucky Block!', reward)
+    this.broadcast(S2C.luckyWinner, { name: s.data.name, petName: '', rarity: null, vip: reward.vip })
     this.changed(s)
   }
 

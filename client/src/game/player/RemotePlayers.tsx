@@ -8,8 +8,9 @@ import { now, THROW_ANIM_S } from '../runtime'
 
 /**
  * Other players as blocky avatars — head, torso, two arms, two legs — all players'
- * parts in ONE instanced draw call. (Full Bloxity avatars cost ~7 draw calls each;
- * seven of them would blow the mobile budget on their own.)
+ * parts in ONE instanced draw call. The nearest few are drawn as their real Bloxity
+ * avatars instead (RemoteAvatars; ~6 draw calls each, so the count is capped per
+ * quality preset); their blocky slots are hidden.
  */
 const PARTS = 6
 const CAPACITY = (MAX_CLIENTS - 1) * PARTS
@@ -84,6 +85,11 @@ export function RemotePlayers() {
       _root.rotation.set(0, p.prot, 0)
       _root.updateMatrix()
       const base = i * PARTS
+      if (p.full) {
+        // Drawn as a full Bloxity avatar by RemoteAvatars.
+        for (let k = 0; k < PARTS; k += 1) mesh.setMatrixAt(base + k, HIDDEN)
+        continue
+      }
       setPart(mesh, base + 0, 0, 1.95, 0, 0.75, 0.75, 0.75, 0, 1.95) // head
       setPart(mesh, base + 1, 0, 1.25, 0, 1.0, 0.9, 0.5, 0, 1.25) // torso
       setPart(mesh, base + 2, -0.68, 1.25, 0, 0.36, 0.9, 0.42, throwArm, 1.62) // right arm

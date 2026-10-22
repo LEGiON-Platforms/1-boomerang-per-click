@@ -133,13 +133,13 @@ if (isMain) {
   const gauss = () => Math.sqrt(-2 * Math.log(rand() + 1e-12)) * Math.cos(2 * Math.PI * rand())
 
   let best: Params = {
-    earlyGrowth: 20,
-    lateGrowth: 1.8,
-    taper: 3.1,
-    levelBase: 14,
-    levelEarly: 1.9,
-    levelLate: 1.25,
-    levelTaper: 15,
+    earlyGrowth: 20.57,
+    lateGrowth: 1.6,
+    taper: 3.22,
+    levelBase: 19,
+    levelEarly: 2.211,
+    levelLate: 1.049,
+    levelTaper: 18.2,
     costB1: 0.33,
     costB2: 0.0015,
   }

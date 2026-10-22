@@ -38,10 +38,12 @@ export interface AvatarRig {
 }
 
 export interface PlayerAvatarProps {
+  /** Another player's look; omitted = the local Bloxity avatar. */
+  look?: import('@game/shared').AvatarLook
   onReady?: () => void
   onRig?: (rig: AvatarRig) => void
   targetHeight?: number
-  motionRef?: RefObject<{ time: number; speed: number; grounded: boolean; maxSpeed: number; throwPhase: number }>
+  motionRef?: RefObject<{ time: number; speed: number; grounded: boolean; maxSpeed: number; velY?: number; throwPhase: number }>
 }
 
 export const PlayerAvatar = PlayerAvatarJs as unknown as ComponentType<PlayerAvatarProps>

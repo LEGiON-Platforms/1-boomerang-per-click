@@ -6,7 +6,6 @@
   "type": "module",
   "scripts": {
     "simulate": "tsx simulate.ts",
-    "bots": "tsx bots.ts",
     "perf": "tsx perf-probe.ts",
     "typecheck": "tsc -p tsconfig.json"
   },

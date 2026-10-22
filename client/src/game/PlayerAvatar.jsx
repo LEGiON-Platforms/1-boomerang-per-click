@@ -16,6 +16,7 @@ import {
 } from '../bloxity/avatarAssets'
 import { loadOBJ, loadPartGLB, loadTexture } from '../bloxity/avatarLoader'
 import { useBloxity } from '../bloxity/BloxityContext'
+import { DEFAULT_PROPORTIONS } from '../bloxity/store'
 import {
   animateRig,
   applyPart,
@@ -55,10 +56,18 @@ function fallbackMotion(delta) {
  *   rescaled rather than trusted at native size.
  */
 export const PlayerAvatar = forwardRef(function PlayerAvatar(
-  { onReady, onRig, targetHeight = 1.8, motionRef, ...props },
+  { onReady, onRig, targetHeight = 1.8, motionRef, look, ...props },
   ref,
 ) {
-  const { avatar: equipped, proportions, game } = useBloxity()
+  // `look` (another player's relayed AvatarLook) overrides the local Bloxity session.
+  const session = useBloxity()
+  const equipped = useMemo(() => (look ? look.e : session.avatar), [look, session.avatar])
+  const proportions = useMemo(
+    () => (look ? { ...DEFAULT_PROPORTIONS, ...look.p } : session.proportions),
+    [look, session.proportions],
+  )
+  const isLocal = !look
+  const game = session.game
   const { scene: baseScene } = useLoader(GLTFLoader, BASE_BODY_URL)
   const [assembled, setAssembled] = useState(false)
 
@@ -104,7 +113,7 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
     // hat/back can be removed rather than stacking up.
     const attached = []
 
-    game.loadingStep('Loading avatar…')
+    if (isLocal) game.loadingStep('Loading avatar…')
 
     const jobs = []
 
@@ -190,7 +199,7 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
         object.traverse((child) => child.geometry?.dispose())
       }
     }
-  }, [rig, equipped, game])
+  }, [rig, equipped, game, isLocal])
 
   // --- Proportions -------------------------------------------------------------
   // Applied per frame rather than in an effect: every bone is reset to its rest pose

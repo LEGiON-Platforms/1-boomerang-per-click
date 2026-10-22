@@ -47,9 +47,7 @@ interface UIState {
   stageClear: PadClaimedMsg | null
   tutorialRoll: number | null
   offline: OfflineMsg | null
-  /** Shown once on first visit before joining. */
-  needsName: boolean
-  /** Yes/no dialog (gem purchases, deleting pets). */
+  /** Yes/no dialog (perk purchases, deleting pets). */
   confirm: { title: string; text: string; yes: string; onYes: () => void } | null
 
   openPanel: (panel: PanelId, arg?: number) => void
@@ -77,7 +75,6 @@ export const useUI = create<UIState>((set, get) => ({
   stageClear: null,
   tutorialRoll: null,
   offline: null,
-  needsName: false,
   confirm: null,
 
   openPanel: (panel, arg = 0) => set({ panel, panelArg: arg }),

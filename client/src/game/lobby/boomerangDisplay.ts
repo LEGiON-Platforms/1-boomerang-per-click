@@ -9,6 +9,3 @@ export function displayStart(owned: number): number {
   const next = Math.min(owned, BOOMERANGS.length - 1)
   return Math.max(0, Math.min(Math.floor(next / pads) * pads, BOOMERANGS.length - pads))
 }
-
-/** Front-row pads come first; the back row is raised, so its displays float higher. */
-export const isBackRow = (index: number) => index >= BOOMERANG_SPOTS.length / 2

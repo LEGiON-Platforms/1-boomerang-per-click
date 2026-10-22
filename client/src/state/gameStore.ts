@@ -66,6 +66,8 @@ interface GameStoreState {
   nearInteract: InteractTarget | null
   /** Sessions whose name tags are close enough to draw. */
   nearbyTags: string[]
+  /** Other players drawn as full Bloxity avatars, with their looks. */
+  fullAvatars: { id: string; avatar: string }[]
   autoThrow: boolean
   autoWin: boolean
 
@@ -102,6 +104,7 @@ export const useGame = create<GameStoreState>((set) => ({
   onPad: -1,
   nearInteract: null,
   nearbyTags: [],
+  fullAvatars: [],
   autoThrow: false,
   autoWin: false,
 

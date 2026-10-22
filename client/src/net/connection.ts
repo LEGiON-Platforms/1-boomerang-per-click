@@ -7,8 +7,8 @@ import {
   type ErrorMsg,
   ERRORS,
   formatNumber,
-  GEM_SHOP,
-  type GemItemId,
+  PERK_SHOP,
+  type PerkId,
   type LeaderboardsMsg,
   type OfflineMsg,
   type PadClaimedMsg,
@@ -34,6 +34,7 @@ import { cameraState, devPose, localPlayer, pending, playerScreenPoint } from '.
 import { game, type RoomPlayerInfo, useGame } from '../state/gameStore'
 import { ui, useUI } from '../state/uiStore'
 import { flyTrophies } from '../ui/floating'
+import { getBloxityState, useBloxityStore } from '../bloxity/store'
 import { getPlayerId } from './identity'
 import { addRemote, clearRemotes, createRemote, pushSnapshot, removeRemote } from './remote'
 
@@ -75,6 +76,19 @@ if (import.meta.env.DEV) {
 export function send(type: string, payload?: unknown): void {
   room?.send(type, payload)
 }
+
+let sentLook = ''
+
+/** Tells the room what our Bloxity avatar looks like (on join and whenever it changes). */
+export function sendAvatarLook(force = false): void {
+  const { equipped, proportions } = getBloxityState()
+  const look = { e: equipped ?? {}, p: proportions ?? {} }
+  const key = JSON.stringify(look)
+  if (!room || (!force && key === sentLook)) return
+  sentLook = key
+  room.send(C2S.setAvatar, { look })
+}
+useBloxityStore.subscribe(() => sendAvatarLook())
 
 let connecting = false
 
@@ -131,6 +145,7 @@ interface PublicPlayer {
   level: number
   rebirths: number
   throws: number
+  avatar: string
   pets: { toArray(): string[] }
 }
 
@@ -144,6 +159,8 @@ function bindRoom(r: Room): void {
     useGame.getState().setStatus('connected')
     // Re-entering after a reconnect: put the player where the server has them.
     cameraState.snap = true
+    // A new room (or seat) knows nothing of our avatar yet.
+    sendAvatarLook(true)
   })
   r.onMessage(S2C.self, (m: SelfMsg) => useGame.getState().applySelf(m.data, m.publicId, m.serverNow))
   r.onMessage(S2C.run, (m: RunState) => useGame.getState().setRun(m))
@@ -187,7 +204,7 @@ function bindRoom(r: Room): void {
     playSfx('buy')
     if (m.kind === 'boomerang') ui().toast(`${BOOMERANGS[m.id as number]?.name} Boomerang unlocked!`, 'success')
     else if (m.kind === 'trail') ui().toast(`${TRAILS[m.id as number]?.name} Trail unlocked!`, 'success')
-    else ui().toast(`${GEM_SHOP[m.id as GemItemId]?.name ?? 'Item'} unlocked!`, 'success')
+    else ui().toast(`${PERK_SHOP[m.id as PerkId]?.name ?? 'Item'} unlocked!`, 'success')
   })
   r.onMessage(S2C.rebirthDone, (m: { rebirths: number }) => {
     playSfx('rebirth')
@@ -212,6 +229,7 @@ function bindRoom(r: Room): void {
       remote.level = p.level
       remote.rebirths = p.rebirths
       remote.pets = p.pets?.toArray?.() ?? []
+      remote.avatar = p.avatar ?? ''
     }
     applyCosmetics()
     cb.onChange(p as never, () => {

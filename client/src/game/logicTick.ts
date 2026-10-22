@@ -15,7 +15,7 @@ import {
   padAtPosition,
   REBIRTH_STATUE,
   boomerangPadAt,
-  stageAtZ,
+  inCorridor,
   THROW,
   TRAILS_STALL,
   WALLS_PER_STAGE,
@@ -40,12 +40,27 @@ import { requestThrow } from './throwing'
 
 const last = { x: NaN, z: NaN, r: NaN, a: -1, y: NaN, sentAt: 0 }
 let claimSentAt = 0
-/** Lobby → corridor crossings warp straight to the current stage (see tick). */
-let wasInLobby = true
-let gateWarpAt = 0
 /** Display pad stood on at the last tick (-1 = none): buying triggers on stepping onto one. */
 let lastDisplayPad = -1
 let lastTags = ''
+let lastFull = ''
+
+/** Picks the nearest players (within the preset's limits) to draw as full avatars. */
+function pickFullAvatars(px: number, pz: number): { id: string; avatar: string }[] | null {
+  const q = quality()
+  const near = remoteList
+    .map((r) => ({ r, d: Math.hypot(r.px - px, r.pz - pz) }))
+    .filter((e) => e.d < q.remoteAvatarDistance)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, q.remoteAvatars)
+  const chosen = new Set(near.map((e) => e.r.sessionId))
+  for (const r of remoteList) r.full = chosen.has(r.sessionId)
+  const list = near.map((e) => ({ id: e.r.sessionId, avatar: e.r.avatar })).sort((a, b) => (a.id < b.id ? -1 : 1))
+  const key = list.map((a) => a.id + a.avatar).join('|')
+  if (key === lastFull) return null
+  lastFull = key
+  return list
+}
 
 function sendMove(nowMs: number): void {
   const lp = localPlayer
@@ -98,7 +113,7 @@ function tick(): void {
   localPlayer.speedMult = levelSpeedMult(levelForXp(g.xp))
 
   // HUD-facing derived state, written only on change.
-  const stageHere = stageAtZ(p.z)
+  const stageHere = inCorridor(p.z) ? g.run.stage : 0
   const onPad = padAtPosition(p)
   const nearInteract = findInteract()
   const patch: Partial<ReturnType<typeof game>> = {}
@@ -116,6 +131,8 @@ function tick(): void {
     lastTags = tagKey
     patch.nearbyTags = tags
   }
+  const full = pickFullAvatars(p.x, p.z)
+  if (full) patch.fullAvatars = full
   if (Object.keys(patch).length) useGame.getState().set(patch)
 
   // Step onto the win pad → claim it (retry after a second if no answer).
@@ -136,14 +153,6 @@ function tick(): void {
     if (displayPad >= 0) onDisplayPad(displayPad)
   }
 
-  // Walking through the lobby gate takes you straight to your current stage
-  // (if it's untouched — a half-broken run is walked back to as it is).
-  const inLobby = p.z >= 0
-  if (wasInLobby && !inLobby && run.stage > 1 && run.wallsBroken === 0 && nowMs - gateWarpAt > 2000) {
-    gateWarpAt = nowMs
-    send(C2S.teleportStage, { stage: run.stage })
-  }
-  wasInLobby = inLobby
 
   tickPickups(nowMs)
   tickAutopilot()

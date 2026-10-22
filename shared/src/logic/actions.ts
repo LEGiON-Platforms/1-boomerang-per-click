@@ -34,8 +34,8 @@ import {
   CODES,
   DAILY_QUESTS,
   DAILY_REWARDS,
-  GEM_SHOP,
-  type GemItemId,
+  PERK_SHOP,
+  type PerkId,
   HALLOWEEN,
   OFFLINE,
   PLAYTIME_GIFTS,
@@ -52,7 +52,6 @@ import { fail, type Result } from '../errors'
 import type { PetInstance, PlayerData, QuestBook } from '../types'
 import { utcDay, utcWeek } from '../types'
 import {
-  bestUnlockedEgg,
   clickGainFor,
   type GainContext,
   isEggUnlocked,
@@ -204,39 +203,24 @@ export function addBoost(d: PlayerData, id: BoostId, minutes: number, now: numbe
 
 export interface RewardSummary {
   wins: number
-  gems: number
   pumpkins: number
   boosts: { id: BoostId; minutes: number }[]
-  pets: PetInstance[]
+  /** The VIP boomerang dropped (lucky block). */
   vip: boolean
-  /** Gems given instead of a pet because the inventory was full. */
-  convertedGems: number
-  /** The egg that was opened for free, if the reward included one. */
-  eggId?: EggId
 }
 
 const emptySummary = (): RewardSummary => ({
   wins: 0,
-  gems: 0,
   pumpkins: 0,
   boosts: [],
-  pets: [],
   vip: false,
-  convertedGems: 0,
 })
 
-/** Gems handed out when a free egg can't hatch into a full inventory. */
-const FULL_INVENTORY_GEMS = 10
-
-export function grantReward(d: PlayerData, reward: RewardDef, rng: Rng, now: number): RewardSummary {
+export function grantReward(d: PlayerData, reward: RewardDef, now: number): RewardSummary {
   const s = emptySummary()
   if (reward.winsPads) {
     s.wins = rewardWins(d, reward.winsPads)
     addWins(d, s.wins)
-  }
-  if (reward.gems) {
-    s.gems = reward.gems
-    d.gems += reward.gems
   }
   if (reward.pumpkins) {
     s.pumpkins = reward.pumpkins
@@ -246,27 +230,20 @@ export function grantReward(d: PlayerData, reward: RewardDef, rng: Rng, now: num
     addBoost(d, b.id, b.minutes, now)
     s.boosts.push({ id: b.id, minutes: b.minutes })
   }
-  if (reward.pet) {
-    if (d.pets.length >= PETS_CONFIG.inventoryMax) {
-      s.convertedGems += FULL_INVENTORY_GEMS
-      d.gems += FULL_INVENTORY_GEMS
-    } else {
-      s.pets.push(addPet(d, reward.pet.id, reward.pet.rarity, false))
-    }
-  }
-  if (reward.egg) {
-    const eggId = reward.egg === 'best' ? bestUnlockedEgg(d).id : reward.egg
-    const opened = openEgg(d, eggId, 1, rng, { free: true })
-    if (opened.ok) {
-      s.pets.push(...opened.pets)
-      s.vip = s.vip || opened.vip
-      s.eggId = eggId
-    } else {
-      s.convertedGems += FULL_INVENTORY_GEMS
-      d.gems += FULL_INVENTORY_GEMS
-    }
-  }
   return s
+}
+
+/** Lucky Block: a chance at the VIP boomerang, otherwise Wins and a short boost. */
+export const LUCKY_REWARD = { vipChance: 3, winsPads: 6, boostMinutes: 10 } as const
+
+export function grantLuckyReward(d: PlayerData, rng: Rng, now: number): RewardSummary {
+  if (!d.vipBoomerang && rng() * 100 < LUCKY_REWARD.vipChance) {
+    d.vipBoomerang = true
+    return { ...emptySummary(), vip: true }
+  }
+  const boosts: BoostId[] = ['click3x', 'power2x', 'wins2x', 'training2x']
+  const boost = boosts[Math.floor(rng() * boosts.length)]
+  return grantReward(d, { winsPads: LUCKY_REWARD.winsPads, boosts: [{ id: boost, minutes: LUCKY_REWARD.boostMinutes }] }, now)
 }
 
 /* ---------------------------------------------------------------------------
@@ -459,7 +436,7 @@ export function questProgress(d: PlayerData, book: QuestBook, id: string): { val
   return { value: Math.min(def.target, Math.max(0, statValue(d, def.stat) - entry.base)), target: def.target }
 }
 
-export function claimQuest(d: PlayerData, id: string, rng: Rng, now: number): Result<{ reward: RewardSummary }> {
+export function claimQuest(d: PlayerData, id: string, now: number): Result<{ reward: RewardSummary }> {
   refreshPeriods(d, now)
   const book = d.dailyQuests.quests.some((q) => q.id === id) ? d.dailyQuests : d.weeklyQuests
   const entry = book.quests.find((q) => q.id === id)
@@ -469,17 +446,17 @@ export function claimQuest(d: PlayerData, id: string, rng: Rng, now: number): Re
   const { value, target } = questProgress(d, book, id)
   if (value < target) return fail('not_ready')
   entry.claimed = true
-  return { ok: true, reward: grantReward(d, def.reward, rng, now) }
+  return { ok: true, reward: grantReward(d, def.reward, now) }
 }
 
-export function claimGift(d: PlayerData, index: number, rng: Rng, now: number): Result<{ reward: RewardSummary }> {
+export function claimGift(d: PlayerData, index: number, now: number): Result<{ reward: RewardSummary }> {
   refreshPeriods(d, now)
   const gift = PLAYTIME_GIFTS[index]
   if (!gift) return fail('not_found')
   if (d.playtime.claimed.includes(index)) return fail('already_claimed')
   if (d.playtime.seconds < gift.minutes * 60) return fail('not_ready')
   d.playtime.claimed.push(index)
-  return { ok: true, reward: grantReward(d, gift.reward, rng, now) }
+  return { ok: true, reward: grantReward(d, gift.reward, now) }
 }
 
 /** The calendar day (1..7) the next claim would pay out. */
@@ -494,12 +471,12 @@ export function dailyCanClaim(d: PlayerData, now: number): boolean {
   return d.daily.lastClaimDay !== utcDay(now)
 }
 
-export function claimDaily(d: PlayerData, rng: Rng, now: number): Result<{ day: number; reward: RewardSummary }> {
+export function claimDaily(d: PlayerData, now: number): Result<{ day: number; reward: RewardSummary }> {
   if (!dailyCanClaim(d, now)) return fail('already_claimed')
   const day = dailyNextDay(d, now)
   d.daily.streak = day
   d.daily.lastClaimDay = utcDay(now)
-  return { ok: true, day, reward: grantReward(d, DAILY_REWARDS[day - 1], rng, now) }
+  return { ok: true, day, reward: grantReward(d, DAILY_REWARDS[day - 1], now) }
 }
 
 /** Adds active play time (called by the server once a second per connected player). */
@@ -510,11 +487,11 @@ export function addPlaytime(d: PlayerData, seconds: number, now: number): void {
 }
 
 /* ---------------------------------------------------------------------------
- * Gem shop, codes, friends, pumpkins
+ * Perk shop, codes, friends, pumpkins
  * ------------------------------------------------------------------------- */
 
-export function buyGemItem(d: PlayerData, id: GemItemId, rng: Rng, now: number): Result<{ reward: RewardSummary | null }> {
-  const item = GEM_SHOP[id]
+export function buyPerk(d: PlayerData, id: PerkId, now: number): Result<{ reward: RewardSummary | null }> {
+  const item = PERK_SHOP[id]
   if (!item) return fail('not_found')
   if (id === 'starterPack') {
     if (d.perks.starterPack) return fail('already_owned')
@@ -522,19 +499,19 @@ export function buyGemItem(d: PlayerData, id: GemItemId, rng: Rng, now: number):
   } else if (d.perks[id]) {
     return fail('already_owned')
   }
-  if (d.gems < item.cost) return fail('not_enough_gems')
-  d.gems -= item.cost
+  if (d.wins < item.cost) return fail('not_enough_wins')
+  d.wins -= item.cost
   d.perks[id] = true
-  return { ok: true, reward: item.reward ? grantReward(d, item.reward, rng, now) : null }
+  return { ok: true, reward: item.reward ? grantReward(d, item.reward, now) : null }
 }
 
-export function redeemCode(d: PlayerData, rawCode: string, rng: Rng, now: number): Result<{ code: string; reward: RewardSummary }> {
+export function redeemCode(d: PlayerData, rawCode: string, now: number): Result<{ code: string; reward: RewardSummary }> {
   const code = String(rawCode ?? '').trim().toUpperCase()
   const reward = CODES[code]
   if (!reward) return fail('invalid_code')
   if (d.codes.includes(code)) return fail('code_used')
   d.codes.push(code)
-  return { ok: true, code, reward: grantReward(d, reward, rng, now) }
+  return { ok: true, code, reward: grantReward(d, reward, now) }
 }
 
 export const MAX_FRIENDS = 50

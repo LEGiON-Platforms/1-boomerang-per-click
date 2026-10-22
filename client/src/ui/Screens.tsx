@@ -1,24 +1,19 @@
 import { useProgress } from '@react-three/drei'
-import { bestBoomerangId, sanitizeName } from '@game/shared'
+import { bestBoomerangId } from '@game/shared'
 import { useEffect, useRef, useState } from 'react'
 
 import { unlockAudio } from '../audio/sfx'
-import { useBloxitySession as useBloxity } from '../bloxity/session'
 import { boomerangLook } from '../game/boomerangShapes'
 import { input } from '../game/runtime'
 import { requestThrow } from '../game/throwing'
-import { connect } from '../net/connection'
-import { saveName } from '../net/identity'
 import { useGame } from '../state/gameStore'
 import { isTouchDevice } from '../state/qualityStore'
-import { useUI } from '../state/uiStore'
 import { BoomerangIcon, RebirthIcon } from './icons'
 
 /** Loading screen: asset progress (drei useProgress) + connection state. */
 export function LoadingScreen({ ready }: { ready: boolean }) {
   const { progress, active } = useProgress()
   const status = useGame((s) => s.status)
-  const needsName = useUI((s) => s.needsName)
   const [gone, setGone] = useState(false)
 
   useEffect(() => {
@@ -27,7 +22,7 @@ export function LoadingScreen({ ready }: { ready: boolean }) {
     return () => window.clearTimeout(id)
   }, [ready])
 
-  if (gone || needsName) return null
+  if (gone) return null
   const step = status !== 'connected' ? 'Connecting to the game server…' : active ? 'Loading your avatar…' : 'Almost there…'
   const pct = Math.round(status === 'connected' ? 60 + progress * 0.4 : Math.min(55, progress * 0.5))
   return (
@@ -55,62 +50,6 @@ export function LoadingScreen({ ready }: { ready: boolean }) {
           <div className="text txt-outline">{pct}%</div>
         </div>
         <div className="txt-outline text-[24px]">{step}</div>
-      </div>
-    </div>
-  )
-}
-
-/** First visit: pick a display name (prefilled from the Bloxity identity). */
-export function NamePrompt() {
-  const needsName = useUI((s) => s.needsName)
-  const set = useUI((s) => s.set)
-  const { identity } = useBloxity()
-  const [name, setName] = useState('')
-  const [error, setError] = useState('')
-  const touched = useRef(false)
-
-  useEffect(() => {
-    if (touched.current) return
-    const suggested = sanitizeName(identity?.displayName || identity?.username || '')
-    setName(suggested || `Player${Math.floor(1000 + Math.random() * 9000)}`)
-  }, [identity])
-
-  if (!needsName) return null
-  const play = () => {
-    const clean = sanitizeName(name)
-    if (!clean) {
-      setError('Use 3–20 letters, numbers or spaces.')
-      return
-    }
-    unlockAudio()
-    saveName(clean)
-    set({ needsName: false })
-    void connect(clean)
-  }
-  return (
-    <div className="overlay-center" style={{ zIndex: 90, background: 'linear-gradient(180deg,#2a8af5,#86c8fb)' }}>
-      <div className="window-scale">
-        <div className="window studs" style={{ width: 'min(560px, calc(100vw - 32px))' }}>
-          <div className="window-body flex flex-col items-center gap-4 text-center" style={{ paddingTop: 26 }}>
-            <div className="txt-outline text-[48px]">Choose your name</div>
-            <input
-              autoFocus
-              value={name}
-              maxLength={20}
-              onChange={(e) => {
-                touched.current = true
-                setName(e.target.value)
-                setError('')
-              }}
-              onKeyDown={(e) => e.key === 'Enter' && play()}
-              className="body-text h-[64px] w-full rounded-xl border-4 border-[#1b1b22] bg-[#111218] px-4 text-center text-[26px] text-white"
-            />
-            {error && <div className="body-text text-[16px] text-red-300">{error}</div>}
-            <button type="button" className="btn3d buy-btn bg-green" style={{ height: 70, minWidth: 240 }} onClick={play}>
-              <span className="txt-outline text-[40px]">PLAY</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   )

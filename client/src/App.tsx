@@ -1,3 +1,4 @@
+import { C2S, sanitizeName } from '@game/shared'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { unlockAudio } from './audio/sfx'
@@ -5,15 +6,15 @@ import { useBloxitySession as useBloxity } from './bloxity/session'
 import { bindKeyboard } from './game/controls'
 import { GameCanvas } from './game/GameCanvas'
 import { startLogic } from './game/logicTick'
-import { getSavedName } from './net/identity'
+import { send } from './net/connection'
+import { adoptBloxityName } from './net/identity'
 import { useGame } from './state/gameStore'
 import { isTouchDevice } from './state/qualityStore'
-import { useUI } from './state/uiStore'
 import { mountFloatingLayer } from './ui/floating'
 import { Hud } from './ui/Hud'
 import { NameTags } from './ui/NameTags'
 import { prefetchPanels } from './ui/PanelHost'
-import { ConnectionOverlay, LoadingScreen, MobileControls, NamePrompt } from './ui/Screens'
+import { ConnectionOverlay, LoadingScreen, MobileControls } from './ui/Screens'
 
 /** HUD scale: the HUD is laid out for ~1600×900 and scales to fit any screen. */
 function useHudScale(): void {
@@ -29,7 +30,7 @@ function useHudScale(): void {
 }
 
 export default function App() {
-  const { game, status: sdkStatus } = useBloxity()
+  const { game, status: sdkStatus, identity } = useBloxity()
   const rootRef = useRef<HTMLDivElement>(null)
   const [avatarReady, setAvatarReady] = useState(false)
   const [firstFrame, setFirstFrame] = useState(false)
@@ -48,10 +49,11 @@ export default function App() {
     return () => window.removeEventListener('pointerdown', unlock)
   }, [])
 
-  // Returning players are already joining (main.tsx); first-timers pick a name first.
+  // The Bloxity display name replaces the automatic "Player1234" once it's known.
   useEffect(() => {
-    if (!getSavedName()) useUI.getState().set({ needsName: true })
-  }, [])
+    const name = adoptBloxityName(sanitizeName(identity?.displayName || identity?.username || ''))
+    if (name) send(C2S.setName, { name })
+  }, [identity])
 
   // Playable once joined and a frame is on screen; the Bloxity avatar streams in
   // behind a stand-in body rather than holding up the loading screen.
@@ -92,7 +94,6 @@ export default function App() {
       {hasData && <Hud />}
       {hasData && <MobileControls />}
       <LoadingScreen ready={ready} />
-      <NamePrompt />
       <ConnectionOverlay />
     </div>
   )

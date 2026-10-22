@@ -16,7 +16,8 @@ const out = path.join(here, 'out')
 mkdirSync(out, { recursive: true })
 
 const args = process.argv.slice(2)
-const url = args.find((a) => a.startsWith('http')) ?? 'http://localhost:5174/'
+// Defaults to the isolated test client (port 5176 → test server 2568), never the dev room.
+const url = args.find((a) => a.startsWith('http')) ?? 'http://localhost:5176/'
 const stepsArg = args.includes('--steps') ? args[args.indexOf('--steps') + 1] : 'lobby'
 const mobile = args.includes('--mobile')
 
@@ -69,10 +70,7 @@ const openPanel = (p: string) =>
   }, p)
 
 await page.goto(url, { waitUntil: 'domcontentloaded' })
-const nameInput = page.locator('input').first()
-await nameInput.waitFor({ timeout: 20000 })
-await nameInput.fill(`Shot${Math.floor(Math.random() * 9000 + 1000)}`)
-await page.getByText('PLAY', { exact: true }).click()
+// No name screen: the game joins straight away.
 await page.locator('.hud').waitFor({ timeout: 30000 })
 await sleep(3500)
 await shot(page, `${mobile ? 'm-' : ''}01-lobby`)
@@ -111,7 +109,7 @@ if (stepsArg === 'clear' || stepsArg === 'all') {
     await hold(page, 'w', 350)
   }
   const stage = (await run()).stage
-  const padZ = -(stage - 1) * 80 - 4 - 75
+  const padZ = -4 - 75 // one shared corridor: the pad is in the same place for every stage
   // Into the reward room, then look at it.
   await page.keyboard.down('Shift')
   for (let i = 0; i < 40 && (await pos()).z > padZ + 7; i += 1) await hold(page, 'w', 250)
@@ -135,7 +133,6 @@ if (stepsArg === 'panels' || stepsArg === 'all') {
   for (const [label, file] of [
     ['Shop', '07-shop'],
     ['Rebirth', '08-rebirth'],
-    ['Stages', '09-stages'],
   ] as const) {
     await page.locator('button', { hasText: label }).first().click()
     await sleep(700)
@@ -146,6 +143,7 @@ if (stepsArg === 'panels' || stepsArg === 'all') {
   // The other Shop tabs and Settings.
   for (const [panel, file] of [
     ['trails', '06-trails'],
+    ['stages', '09-stages'],
     ['boosts', '24-boosts'],
     ['settings', '25-settings'],
   ] as const) {

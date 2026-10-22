@@ -36,9 +36,11 @@ Any Node 20+ host with WebSockets works (Render, Fly.io, Railway, a VPS). Put it
 
 ## How the game plays
 
-- **Lobby:** training pads with dummies (west; standing on a pad trains automatically, clicking adds more), the **Boomerang Stage** (east), egg blocks, leaderboards, the rebirth statue, the trails stall, pumpkins for the Halloween event. The top-left of the screen is kept empty for the host's logo.
+- **Lobby:** training pads with dummies (west; standing on a pad trains automatically, clicking adds more), the **Boomerang Stage** (east), the **Halloween Egg** at the front right of the stage gate, leaderboards, the rebirth statue, the trails stall, pumpkins to collect. The top-left of the screen is kept empty for the host's logo. There is no name screen: players join straight away under their Bloxity name (or an automatic one, changeable in Settings).
+- **Players:** everyone appears as their real Bloxity avatar — outfit and proportions are relayed through the room. The nearest few are drawn in full (3 on LOW, 5 on MEDIUM, 7 on HIGH); players further away are simple blocky bodies.
 - **Boomerangs:** 25, bought in order with Wins (Plastic costs 3 Wins … Godly 110M). The Boomerang Stage shows 20 at a time in two rows; step on the glowing pad of the next one to buy it (or use Shop → Boomerangs). Every boomerang has its own silhouette, pattern and colours, from the 3D model down to the shop icon.
-- **Stages:** 30 stages of 10 walls. Past wall 10 the corridor opens into a reward room; the Wins pad (with a spinning trophy) is against the left wall. Claiming it sends trophies flying into the Wins counter and respawns you in the lobby, lined up for the next stage. Walking through the lobby gate takes you straight to it; Settings → Stages jumps anywhere unlocked.
+- **Stages:** 30 stages of 10 walls (plastic, wood, concrete, brick, stone, marble, metals, gems, diamond, lava, ice, …), all played in the same corridor behind the lobby gate: each player sees the walls of *their own* current stage (per-player walls). Cracks spread across a wall as it takes damage. Past wall 10 the corridor opens into a reward room; the Wins pad (with a spinning trophy) is against the left wall. Claiming it sends trophies flying into the Wins counter and respawns you in the lobby — with the next stage's walls standing behind the gate. Settings → Stages jumps to any unlocked stage.
+- **Shop:** everything costs Wins — boomerangs, trails, and the perks in the Boosts tab (Auto Win 2,000, 2x Power 25,000, 2x Wins 150,000, plus a 3-Win Starter Pack in a new player's first 10 minutes). The only other currency is pumpkins, for the Halloween Egg and its pets (Items tab: equip, merge 5 into a golden one). Daily rewards, gifts, quests and codes pay Wins scaled to your progress, pumpkins and boosts; a Lucky Block pays Wins and a boost, with a small chance of the VIP boomerang.
 - **Rebirth:** gated by level — Rebirth 1 at level 15, 2 at level 30, 3 at level 45 (15 × n). It resets Power, Wins and stage progress and raises the Power multiplier. Level comes from lifetime Power and also makes you walk faster (+1% per level, up to +60%).
 - **HUD:** left — Rebirths, Wins and Pumpkins, plus Shop (tabs: Boomerangs, Trails, Items, Boosts) and Rebirth. Top-right — Settings only (daily rewards, gifts, quests, codes, friends and stages are inside it). Bottom — Power, the level bar and four training-pad buttons. Click gains fly from the cursor (with a flame) into the Power counter; there is no notification panel, short messages float up instead.
 
@@ -51,22 +53,22 @@ npm run simulate                 # 30-hour run of a 5 clicks/s player through th
 npx tsx tools/tune.ts --keep-costs   # search wall HP + XP curve to hit the time targets
 ```
 
-Current simulation (5 clicks/s, buys as soon as it can, rebirths as soon as the level allows):
+Current simulation (5 clicks/s, buys boomerangs, trails and the 2x Power / 2x Wins perks as soon as it can, rebirths as soon as the level allows):
 
 | Target | Result |
 |---|---|
 | Stage 1 < 1 min | 8 s |
-| Stage 5 in 8–12 min | 9 m 29 s |
-| First rebirth in 15–25 min | 16 m 16 s (level 15) |
-| Stage 10 ≈ 1 h | 1 h 10 m |
-| Stage 20 in 6–8 h | 7 h 40 m |
-| Stage 30 in 20–30 h | 24 h 02 m, 10 rebirths |
+| Stage 5 in 8–12 min | 9 m 33 s |
+| First rebirth in 15–25 min | 16 m 08 s (level 15) |
+| Stage 10 ≈ 1 h | 1 h 02 m |
+| Stage 20 in 6–8 h | 7 h 26 m |
+| Stage 30 in 20–30 h | 23 h 34 m, 14 rebirths |
 
-Wall HP grows by a factor that tapers from 20.6 (early stages) to 1.6 (late); a single constant can't hit both the early and the late targets. The XP curve tapers the same way so level 15 arrives at ~16 minutes while levels 30, 45, … stay reachable.
+Wall HP grows by a factor that tapers from 21.9 (early stages) to 2.04 (late); a single constant can't hit both the early and the late targets. The XP curve tapers the same way so level 15 arrives at ~16 minutes while levels 30, 45, … stay reachable. The perk prices sit on the same curve: Auto Win around Stage 10, 2x Power around Stage 15, 2x Wins around Stage 20.
 
 ## Multiplayer and anti-cheat
 
-Rooms of 8 (`joinOrCreate`, overflow opens a new room). The server runs every economy action through the same functions in `shared/src/logic/` the simulator uses, and validates input: a 12 throws/s token bucket, an 80 messages/s flood cap, movement speed (scaled by level) and walkable-area checks with rubber-banding, distance checks for eggs and pads, and stage checks for wall damage. One live session per account (a new tab takes over the old one), 20 s reconnection window, autosave every 30 s.
+Rooms of 8 (`joinOrCreate`, overflow opens a new room). The server runs every economy action through the same functions in `shared/src/logic/` the simulator uses, and validates input: a 12 throws/s token bucket, an 80 messages/s flood cap, movement speed (scaled by level) and walkable-area checks with rubber-banding, distance checks for the egg and pads, and corridor checks for wall damage. One live session per account (a new tab takes over the old one), 20 s reconnection window, autosave every 30 s.
 
 ## Performance
 
@@ -76,7 +78,7 @@ The game follows a strict budget (60 FPS, ≤ 80 draw calls and ≤ 100k triangl
 
 ### Latest measurements
 
-Production build, headless Edge on the development machine. Desktop numbers are with 8 players in the room; the phone runs were taken without bots, as the median of 3 runs.
+Production build, headless Edge on the development machine. Desktop numbers are with 8 players in the room; the phone runs were taken with the probe alone in the room, as the median of 3 runs. (The probe adds scripted players only with `--bots N`, and only on an isolated test server.)
 
 | Budget | Mobile LOW (4× CPU throttle) | Desktop HIGH / MEDIUM |
 |---|---|---|
@@ -112,7 +114,6 @@ Server only: `@colyseus/core`, `@colyseus/ws-transport`, `express`, `cors`, `mon
 
 | Command | What it does |
 |---|---|
-| `npm run test:bots` | 9 headless players: rooms, throws, walls, pads, codes, gems, eggs, rebirth, persistence, duplicate login (30 checks) |
-| `npx tsx tools/shot.ts --steps all [--mobile]` | Headless screenshots of every screen (dev server on :5174) |
+| `npx tsx tools/shot.ts --steps all [--mobile]` | Headless screenshots of every screen, against an isolated test client on :5176 (its own server on :2568, so tests never join real players' rooms) |
 | `npm run perf` | Performance probe (see above) |
 | `npm run simulate` / `tools/tune.ts` | Balance report / tuner |

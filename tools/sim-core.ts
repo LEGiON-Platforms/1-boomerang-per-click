@@ -21,7 +21,9 @@ import {
   MAX_SPEED,
   PAD_OFFSET,
   padWins,
+  buyPerk,
   levelForXp,
+  PERK_SHOP,
   rebirth,
   rebirthLevel,
   STAGE_COUNT,
@@ -34,6 +36,8 @@ import {
   WALLS_PER_STAGE,
   type PlayerData,
 } from '@game/shared'
+
+const SIM_PERKS = ['power2x', 'wins2x'] as const
 
 export interface SimOptions {
   cps: number
@@ -107,8 +111,16 @@ export function runSimulation(opts: SimOptions): SimResult {
   const gainPad = () => clickGainFor(d, { padId: bestUnlockedPad(d.rebirths), friendsInRoom: 0, now: 0 })
   const nextTrail = () => TRAILS.find((x) => !d.trailsOwned.includes(x.id))
 
+  /** Permanent perks the simulated player saves for once nothing cheaper is left (Auto Win doesn't change click speed). */
+  const nextPerk = () => SIM_PERKS.find((id) => !d.perks[id])
+
   function nextPurchaseCost(): number {
-    return Math.min(BOOMERANGS[d.boomerangsOwned]?.cost ?? Infinity, nextTrail()?.cost ?? Infinity)
+    const perk = nextPerk()
+    return Math.min(
+      BOOMERANGS[d.boomerangsOwned]?.cost ?? Infinity,
+      nextTrail()?.cost ?? Infinity,
+      perk ? PERK_SHOP[perk].cost : Infinity,
+    )
   }
 
   function shop(): void {
@@ -118,6 +130,8 @@ export function runSimulation(opts: SimOptions): SimResult {
       if (buyNextBoomerang(d).ok) bought = true
       const t = nextTrail()
       if (t && buyTrail(d, t.id).ok) bought = true
+      const perk = nextPerk()
+      if (perk && buyPerk(d, perk, 0).ok) bought = true
     }
     // Rebirths cost no Wins, only a level: take one as soon as it's allowed
     // (everything affordable has just been bought).

@@ -30,8 +30,9 @@ const arg = (name: string, fallback: string) => {
   return i >= 0 ? args[i + 1] : fallback
 }
 const URL = arg('url', 'http://localhost:4173/')
-const SERVER = arg('server', 'http://localhost:2567')
-const BOTS = Number(arg('bots', '7'))
+const SERVER = arg('server', 'http://localhost:2568')
+/** Scripted extra players (--bots 7 for a full room). Off by default: only on an isolated test server. */
+const BOTS = Number(arg('bots', '0'))
 /** Runs per scenario; each view reports its median-FPS run (machine noise is large). */
 const REPEAT = Number(arg('repeat', '1'))
 /** Only scenarios whose name contains this (e.g. --only mobile). */
@@ -49,9 +50,6 @@ async function spawnBots(n: number): Promise<{ rooms: Room[]; stop: () => void }
     const client = new Client(SERVER)
     const room = await client.joinOrCreate(ROOM_NAME, { playerId: `probe-${RUN}-${i}`.padEnd(20, '0'), name: `Bot${i}` })
     room.onMessage('*', () => {})
-    room.send(C2S.redeemCode, { code: 'RELEASE' })
-    room.send(C2S.redeemCode, { code: '100LIKES' })
-    setTimeout(() => room.send(C2S.buyGemItem, { item: 'starterPack' }), 500)
     rooms.push(room)
   }
   let t = 0

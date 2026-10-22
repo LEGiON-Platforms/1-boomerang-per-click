@@ -2,7 +2,7 @@
  * The persisted player record. The server owns it; the client receives copies.
  */
 
-import type { EggId, Rarity } from './config/pets'
+import { type EggId, PET_BY_ID, type Rarity } from './config/pets'
 import type { BadgeId, BoostId } from './config/retention'
 
 export const PLAYER_DATA_VERSION = 1
@@ -59,7 +59,6 @@ export interface PlayerData {
 
   power: number
   wins: number
-  gems: number
   pumpkins: number
   rebirths: number
 
@@ -123,7 +122,6 @@ export function createPlayerData(id: string, name: string, now: number): PlayerD
     lastSeen: now,
     power: 0,
     wins: 0,
-    gems: 0,
     pumpkins: 0,
     rebirths: 0,
     stageCleared: 0,
@@ -182,7 +180,6 @@ export function normalizePlayerData(raw: unknown, id: string, name: string, now:
     name: typeof r.name === 'string' && r.name ? r.name : name,
     power: num(r.power, 0),
     wins: num(r.wins, 0),
-    gems: num(r.gems, 0),
     pumpkins: num(r.pumpkins, 0),
     rebirths: num(r.rebirths, 0),
     stageCleared: num(r.stageCleared, 0),
@@ -204,6 +201,9 @@ export function normalizePlayerData(raw: unknown, id: string, name: string, now:
     friends: Array.isArray(r.friends) ? r.friends : [],
     pumpkinRespawn: isObj(r.pumpkinRespawn) ? (r.pumpkinRespawn as Record<number, number>) : {},
   }
+  // Gems were retired (everything costs Wins now); pets of retired species are dropped.
+  delete (merged as { gems?: number }).gems
+  merged.pets = merged.pets.filter((p) => PET_BY_ID[p.petId])
   // Equipped pets must still exist in the inventory.
   const uids = new Set(merged.pets.map((p) => p.uid))
   merged.equippedPets = merged.equippedPets.filter((u) => uids.has(u))

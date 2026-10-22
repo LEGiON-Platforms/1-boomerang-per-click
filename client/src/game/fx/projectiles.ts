@@ -143,12 +143,16 @@ export function stepProjectiles(dt: number): void {
   }
 }
 
+/** Current position of a boomerang in flight, written into `out`. */
+export function projectilePosition(p: Projectile, out: Vector3): Vector3 {
+  return pathPosition(p, p.t, out)
+}
+
 /**
  * Position along the out-and-back arc at normalised time t (0..1), written into
  * `out`. The return leg curves to one side so it reads as a boomerang.
  */
-export function projectilePosition(p: Projectile, out: Vector3): Vector3 {
-  const t = p.t
+export function pathPosition(p: Projectile, t: number, out: Vector3): Vector3 {
   const k = t < 0.5 ? t * 2 : 2 - t * 2 // 0 → 1 → 0 along the path
   const ease = 1 - (1 - k) * (1 - k)
   out.lerpVectors(p.from, p.to, ease)

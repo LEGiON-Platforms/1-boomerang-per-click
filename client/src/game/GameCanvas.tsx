@@ -15,6 +15,7 @@ import { NameTagProjector } from './NameTagProjector'
 import { Pets } from './pets/Pets'
 import { Pumpkins } from './Pumpkins'
 import { LocalPlayer } from './player/LocalPlayer'
+import { RemoteAvatars } from './player/RemoteAvatars'
 import { RemotePlayers } from './player/RemotePlayers'
 import { view } from './runtime'
 import { FOG, SKY } from './sceneStyle'
@@ -175,6 +176,7 @@ export function GameCanvas({ onAvatarReady, onFirstFrame, children }: Props) {
         )}
         <LocalPlayer onAvatarReady={onAvatarReady} />
         <RemotePlayers />
+        <RemoteAvatars />
         <Pets />
         <LuckyBlock />
         <Pumpkins />

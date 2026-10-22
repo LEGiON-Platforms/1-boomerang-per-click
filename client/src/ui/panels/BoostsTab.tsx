@@ -1,4 +1,4 @@
-import { C2S, formatNumber, formatOfferClock, GEM_SHOP, type GemItemId, starterPackSecondsLeft } from '@game/shared'
+import { C2S, formatNumber, formatOfferClock, PERK_SHOP, type PerkId, starterPackSecondsLeft } from '@game/shared'
 import type { ReactNode } from 'react'
 
 import { playSfx } from '../../audio/sfx'
@@ -6,17 +6,18 @@ import { send } from '../../net/connection'
 import { useGame } from '../../state/gameStore'
 import { ui } from '../../state/uiStore'
 import { useServerClock } from '../hooks'
-import { BoomerangIcon, GemIcon, PowerBurstIcon, TrophyIcon } from '../icons'
+import { BoomerangIcon, PowerBurstIcon, TrophyIcon } from '../icons'
 import { Num } from '../Num'
 
-function buyGem(item: GemItemId, blurb: string) {
-  const def = GEM_SHOP[item]
+function buyPerk(item: PerkId, blurb: string) {
+  const def = PERK_SHOP[item]
   playSfx('click')
-  ui().ask(def.name, `${blurb} Costs ${def.cost} gems.`, `Buy for ${def.cost}`, () => send(C2S.buyGemItem, { item }))
+  const price = formatNumber(def.cost)
+  ui().ask(def.name, `${blurb} Costs ${price} Wins.`, `Buy for ${price}`, () => send(C2S.buyPerk, { item }))
 }
 
 interface OfferRowProps {
-  item: GemItemId
+  item: PerkId
   icon: ReactNode
   title: string
   color: string
@@ -28,7 +29,8 @@ interface OfferRowProps {
 }
 
 function OfferRow({ item, icon, title, color, blurb, owned, ownedAction, extra }: OfferRowProps) {
-  const gems = useGame((s) => s.data?.gems ?? 0)
+  const cost = PERK_SHOP[item].cost
+  const affordable = useGame((s) => s.wins >= cost)
   return (
     <div className="list-row">
       <div className="grid w-[76px] place-items-center">{icon}</div>
@@ -47,9 +49,9 @@ function OfferRow({ item, icon, title, color, blurb, owned, ownedAction, extra }
             </span>
           ))
         ) : (
-          <button type="button" className="btn3d buy-btn bg-purple" disabled={gems < GEM_SHOP[item].cost} onClick={() => buyGem(item, blurb)}>
-            <GemIcon size={30} />
-            <span className="txt-outline">{GEM_SHOP[item].cost}</span>
+          <button type="button" className="btn3d buy-btn bg-green" disabled={!affordable} onClick={() => buyPerk(item, blurb)}>
+            <TrophyIcon size={34} />
+            <span className="txt-outline">{formatNumber(cost)}</span>
           </button>
         )}
       </div>
@@ -88,7 +90,7 @@ function StarterPackRow() {
       }
       title="Starter Pack"
       color="#ff8ae2"
-      blurb="A free Blue Block pet plus 30 minutes of 2x Wins and 3x Click Power."
+      blurb="30 minutes of 2x Wins and 3x Click Power, for new players."
       owned={false}
       extra={
         <div className="txt-outline mt-1 text-[20px]" style={{ color: '#ff5d5d' }}>
@@ -99,19 +101,22 @@ function StarterPackRow() {
   )
 }
 
-/** Shop tab — permanent gem upgrades and the limited Starter Pack. */
+/** Shop tab — permanent upgrades bought with Wins, and the limited Starter Pack. */
 export function BoostsTab() {
   const data = useGame((s) => s.data)
   if (!data) return null
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="txt-outline flex items-center gap-2 text-[30px]">
-          <GemIcon size={36} /> <Num value={formatNumber(data.gems)} style={{ color: '#5ff0c8' }} /> Gems
-        </span>
-        <span className="body-text text-[15px] opacity-80">Earn gems from Daily Rewards, Quests and Codes (in Settings).</span>
-      </div>
       <StarterPackRow />
+      <OfferRow
+        item="autoWin"
+        icon={<BoomerangIcon size={64} />}
+        title="Auto Win"
+        color="#ff6b6b"
+        blurb="Walks and breaks your current stage for you, forever."
+        owned={data.perks.autoWin}
+        ownedAction={<AutoWinSwitch />}
+      />
       <OfferRow
         item="power2x"
         icon={<PowerBurstIcon size={64} />}
@@ -127,15 +132,6 @@ export function BoostsTab() {
         color="#ffd21f"
         blurb="Permanently doubles every Win you earn."
         owned={data.perks.wins2x}
-      />
-      <OfferRow
-        item="autoWin"
-        icon={<BoomerangIcon size={64} />}
-        title="Auto Win"
-        color="#ff6b6b"
-        blurb="Walks and breaks your current stage for you, forever."
-        owned={data.perks.autoWin}
-        ownedAction={<AutoWinSwitch />}
       />
     </>
   )

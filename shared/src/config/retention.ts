@@ -1,10 +1,10 @@
 /**
  * Everything that keeps players around: boosts, playtime gifts, daily calendar,
- * quests, the gem shop, codes, badges, the Halloween event, offline earnings,
+ * quests, the perk shop, codes, badges, the Halloween event, offline earnings,
  * friend boost, the lucky block drop and the tutorial.
  */
 
-import type { EggId, Rarity } from './pets'
+import type { Rarity } from './pets'
 
 /* ---------------------------------------------------------------------------
  * Boosts
@@ -33,15 +33,15 @@ export const BOOST_MAX_MINUTES = 120
  * Rewards (gifts, daily, quests, codes, offers)
  * ------------------------------------------------------------------------- */
 
+/**
+ * Everything in the game is bought with Wins (pets with pumpkins), so rewards pay
+ * Wins — scaled to the player's progress — pumpkins and boosts.
+ */
 export interface RewardDef {
   /** Wins worth this many clears of the player's best stage pad. */
   winsPads?: number
-  gems?: number
   pumpkins?: number
   boosts?: ReadonlyArray<{ id: BoostId; minutes: number }>
-  /** A free open of this egg, or of the best egg the player has unlocked. */
-  egg?: EggId | 'best'
-  pet?: { id: string; rarity: Rarity }
 }
 
 /* ---------------------------------------------------------------------------
@@ -54,14 +54,14 @@ export interface GiftDef {
 }
 
 export const PLAYTIME_GIFTS: readonly GiftDef[] = [
-  { minutes: 1, reward: { gems: 10 } },
+  { minutes: 1, reward: { winsPads: 2 } },
   { minutes: 3, reward: { winsPads: 3 } },
   { minutes: 5, reward: { boosts: [{ id: 'click3x', minutes: 10 }] } },
-  { minutes: 8, reward: { gems: 10 } },
+  { minutes: 8, reward: { winsPads: 4 } },
   { minutes: 12, reward: { boosts: [{ id: 'wins2x', minutes: 10 }] } },
   { minutes: 15, reward: { winsPads: 8 } },
-  { minutes: 20, reward: { egg: 'best' } },
-  { minutes: 30, reward: { gems: 25, boosts: [{ id: 'power2x', minutes: 15 }] } },
+  { minutes: 20, reward: { winsPads: 10, pumpkins: 10 } },
+  { minutes: 30, reward: { winsPads: 12, boosts: [{ id: 'power2x', minutes: 15 }] } },
 ]
 
 /* ---------------------------------------------------------------------------
@@ -69,13 +69,13 @@ export const PLAYTIME_GIFTS: readonly GiftDef[] = [
  * ------------------------------------------------------------------------- */
 
 export const DAILY_REWARDS: readonly RewardDef[] = [
-  { gems: 10 },
+  { winsPads: 3 },
   { winsPads: 5 },
-  { gems: 5, boosts: [{ id: 'wins2x', minutes: 15 }] },
-  { gems: 15 },
-  { egg: 'best' },
-  { gems: 20, boosts: [{ id: 'click3x', minutes: 20 }] },
-  { gems: 30, pet: { id: 'calendar_champ', rarity: 'legendary' } },
+  { winsPads: 3, boosts: [{ id: 'wins2x', minutes: 15 }] },
+  { winsPads: 8 },
+  { pumpkins: 25 },
+  { winsPads: 8, boosts: [{ id: 'click3x', minutes: 20 }] },
+  { winsPads: 20, pumpkins: 50, boosts: [{ id: 'power2x', minutes: 30 }] },
 ]
 
 /* ---------------------------------------------------------------------------
@@ -102,51 +102,54 @@ export interface QuestDef {
 }
 
 export const DAILY_QUESTS: readonly QuestDef[] = [
-  { id: 'd_throw', title: 'Throw 2,000 times', stat: 'throws', target: 2_000, reward: { gems: 10, winsPads: 3 } },
-  { id: 'd_walls', title: 'Break 100 walls', stat: 'wallsBroken', target: 100, reward: { gems: 5, winsPads: 4 } },
-  { id: 'd_stage', title: 'Clear Stage 5', stat: 'stageClear', target: 5, reward: { gems: 5, boosts: [{ id: 'wins2x', minutes: 10 }] } },
-  { id: 'd_eggs', title: 'Open 3 eggs', stat: 'eggsOpened', target: 3, reward: { gems: 8 } },
-  { id: 'd_pumpkins', title: 'Collect 15 pumpkins', stat: 'pumpkins', target: 15, reward: { gems: 10 } },
+  { id: 'd_throw', title: 'Throw 2,000 times', stat: 'throws', target: 2_000, reward: { winsPads: 5 } },
+  { id: 'd_walls', title: 'Break 100 walls', stat: 'wallsBroken', target: 100, reward: { winsPads: 5 } },
+  { id: 'd_stage', title: 'Clear Stage 5', stat: 'stageClear', target: 5, reward: { winsPads: 2, boosts: [{ id: 'wins2x', minutes: 10 }] } },
+  { id: 'd_eggs', title: 'Open a Halloween Egg', stat: 'eggsOpened', target: 1, reward: { winsPads: 3 } },
+  { id: 'd_pumpkins', title: 'Collect 15 pumpkins', stat: 'pumpkins', target: 15, reward: { pumpkins: 15 } },
   { id: 'd_pads', title: 'Claim 10 Win Pads', stat: 'padsClaimed', target: 10, reward: { winsPads: 5 } },
-  { id: 'd_play', title: 'Play for 20 minutes', stat: 'playMinutes', target: 20, reward: { gems: 5, boosts: [{ id: 'click3x', minutes: 10 }] } },
+  { id: 'd_play', title: 'Play for 20 minutes', stat: 'playMinutes', target: 20, reward: { winsPads: 2, boosts: [{ id: 'click3x', minutes: 10 }] } },
 ]
 
 export const WEEKLY_QUESTS: readonly QuestDef[] = [
-  { id: 'w_throw', title: 'Throw 25,000 times', stat: 'throws', target: 25_000, reward: { gems: 50 } },
-  { id: 'w_walls', title: 'Break 1,000 walls', stat: 'wallsBroken', target: 1_000, reward: { gems: 40, winsPads: 20 } },
-  { id: 'w_rebirth', title: 'Rebirth 2 times', stat: 'rebirths', target: 2, reward: { gems: 50, boosts: [{ id: 'power2x', minutes: 30 }] } },
-  { id: 'w_eggs', title: 'Open 30 eggs', stat: 'eggsOpened', target: 30, reward: { gems: 40 } },
-  { id: 'w_stage', title: 'Clear Stage 10', stat: 'stageClear', target: 10, reward: { gems: 40, egg: 'best' } },
-  { id: 'w_play', title: 'Play for 3 hours', stat: 'playMinutes', target: 180, reward: { gems: 60 } },
+  { id: 'w_throw', title: 'Throw 25,000 times', stat: 'throws', target: 25_000, reward: { winsPads: 15 } },
+  { id: 'w_walls', title: 'Break 1,000 walls', stat: 'wallsBroken', target: 1_000, reward: { winsPads: 30 } },
+  { id: 'w_rebirth', title: 'Rebirth 2 times', stat: 'rebirths', target: 2, reward: { winsPads: 15, boosts: [{ id: 'power2x', minutes: 30 }] } },
+  { id: 'w_eggs', title: 'Open 5 Halloween Eggs', stat: 'eggsOpened', target: 5, reward: { winsPads: 12, pumpkins: 50 } },
+  { id: 'w_stage', title: 'Clear Stage 10', stat: 'stageClear', target: 10, reward: { winsPads: 15 } },
+  { id: 'w_play', title: 'Play for 3 hours', stat: 'playMinutes', target: 180, reward: { winsPads: 20 } },
 ]
 
 export const QUESTS_PER_PERIOD = 3
 
 /* ---------------------------------------------------------------------------
- * Gem shop (gems are earned only from gifts/quests/daily/lucky blocks — no real money)
+ * Perk shop (Shop → Boosts): permanent upgrades, bought with Wins
  * ------------------------------------------------------------------------- */
 
-export type GemItemId = 'power2x' | 'wins2x' | 'autoWin' | 'starterPack'
+export type PerkId = 'power2x' | 'wins2x' | 'autoWin' | 'starterPack'
 
-export interface GemItemDef {
-  id: GemItemId
+export interface PerkDef {
+  id: PerkId
   name: string
+  /** Price in Wins. Priced against the progression curve (see README "Balance"). */
   cost: number
   permanent: boolean
   reward?: RewardDef
 }
 
-export const GEM_SHOP: Record<GemItemId, GemItemDef> = {
-  power2x: { id: 'power2x', name: '2x Power', cost: 60, permanent: true },
-  wins2x: { id: 'wins2x', name: '2x Wins', cost: 120, permanent: true },
-  autoWin: { id: 'autoWin', name: 'Auto Win', cost: 40, permanent: true },
+export const PERK_SHOP: Record<PerkId, PerkDef> = {
+  /** ≈ Stage 10, about an hour in. */
+  autoWin: { id: 'autoWin', name: 'Auto Win', cost: 2_000, permanent: true },
+  /** ≈ Stage 15, three to four hours in. */
+  power2x: { id: 'power2x', name: '2x Power', cost: 25_000, permanent: true },
+  /** ≈ Stage 19–20, about seven hours in. */
+  wins2x: { id: 'wins2x', name: '2x Wins', cost: 150_000, permanent: true },
   starterPack: {
     id: 'starterPack',
     name: 'Starter Pack',
-    cost: 29,
+    cost: 3,
     permanent: false,
     reward: {
-      egg: 'blue',
       boosts: [
         { id: 'wins2x', minutes: 30 },
         { id: 'click3x', minutes: 30 },
@@ -163,8 +166,8 @@ export const STARTER_PACK_WINDOW_MINUTES = 10
  * ------------------------------------------------------------------------- */
 
 export const CODES: Record<string, RewardDef> = {
-  RELEASE: { gems: 25, boosts: [{ id: 'wins2x', minutes: 10 }] },
-  '100LIKES': { gems: 10, boosts: [{ id: 'click3x', minutes: 15 }] },
+  RELEASE: { winsPads: 5, boosts: [{ id: 'wins2x', minutes: 10 }] },
+  '100LIKES': { winsPads: 3, boosts: [{ id: 'click3x', minutes: 15 }] },
   HALLOWEEN: { pumpkins: 50 },
   SPOOKY: { boosts: [{ id: 'power2x', minutes: 15 }] },
 }

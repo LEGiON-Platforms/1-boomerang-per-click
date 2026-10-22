@@ -24,6 +24,8 @@ export const PlayerState = schema(
     stage: t.uint8().default(0),
     /** Increments on every throw so other clients can play the animation. */
     throws: t.uint16().default(0),
+    /** Bloxity look (equipped ids + proportions) as compact JSON; see AvatarLook. */
+    avatar: t.string().default(''),
     /** Equipped pets, encoded "petId:rarityIndex:golden". */
     pets: t.array('string'),
   },

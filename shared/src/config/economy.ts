@@ -17,9 +17,9 @@ export const WALL_HP = {
    * `lateGrowth` with a decay of `taper` stages. A single constant can't hit both
    * the early and late time targets — see README "Balance". Tuned by tools/tune.ts.
    */
-  earlyGrowth: 20.57,
-  lateGrowth: 1.6,
-  taper: 3.22,
+  earlyGrowth: 21.88,
+  lateGrowth: 2.04,
+  taper: 2.67,
   /** Each later wall in a stage has +15% of the stage's base HP. */
   perWall: 0.15,
 }
@@ -129,15 +129,15 @@ export function clickGain(f: ClickGainFactors): number {
 
 export const LEVEL = {
   /** XP to reach level 2. Tuned by tools/tune.ts (rebirths are level-gated). */
-  base: 19,
+  base: 16,
   /**
    * XP growth per level tapers from `earlyGrowth` towards `lateGrowth` over
    * `taper` levels: early levels pace the first rebirth (level 15), the gentler
    * tail keeps later rebirths (level 30, 45, …) reachable. Tuned by tools/tune.ts.
    */
-  earlyGrowth: 2.211,
-  lateGrowth: 1.049,
-  taper: 18.2,
+  earlyGrowth: 2.195,
+  lateGrowth: 1.048,
+  taper: 18.8,
 }
 
 /** Walking gets faster with level: +1% per level above 1, capped. */

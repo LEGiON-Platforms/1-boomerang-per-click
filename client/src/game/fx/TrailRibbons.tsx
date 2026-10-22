@@ -16,14 +16,19 @@ import { remoteList } from '../../net/remote'
 import { game } from '../../state/gameStore'
 import { useQuality } from '../../state/qualityStore'
 import { localPlayer } from '../runtime'
-import { PROJECTILE_CAPACITY, projectilePosition, projectiles } from './projectiles'
+import { pathPosition, type Projectile, PROJECTILE_CAPACITY, projectiles } from './projectiles'
 
 /**
- * Trail ribbons behind thrown boomerangs (MEDIUM/HIGH) and players (HIGH). Every
+ * Trail ribbons behind thrown boomerangs (every preset) and players (HIGH). Every
  * ribbon lives in ONE preallocated dynamic geometry — all trails are one draw
  * call. Camera-facing strips that taper and fade towards the tail.
+ *
+ * A boomerang's trail is sampled from its known flight curve (not from past
+ * frames), so it traces the path smoothly at any frame rate.
  */
-const SEG = 12
+const SEG = 16
+/** How much of the flight (0..1) a boomerang's trail covers behind it. */
+const PATH_SPAN = 0.3
 const PLAYER_BASE = PROJECTILE_CAPACITY
 const RIBBONS = PROJECTILE_CAPACITY + MAX_CLIENTS
 const HEADS = TRAILS.map((t) => new Color(t.colors[0]))
@@ -43,7 +48,6 @@ class RibbonBuffers {
   private readonly filled = new Uint8Array(RIBBONS)
   private readonly positions: Float32Array
   private readonly colors: Float32Array
-  readonly lastId = new Int32Array(RIBBONS).fill(-1)
 
   constructor() {
     const pos = new BufferAttribute(new Float32Array(RIBBONS * SEG * 2 * 3), 3)
@@ -70,20 +74,29 @@ class RibbonBuffers {
     this.geometry.setIndex(new BufferAttribute(index, 1))
   }
 
-  reset(r: number): void {
-    this.filled[r] = 0
-  }
-
   hide(r: number): void {
     this.filled[r] = 0
     const C = this.colors
     for (let v = 0; v < SEG * 2; v += 1) C[(r * SEG * 2 + v) * 4 + 3] = 0
   }
 
+  /** A boomerang's trail: SEG points sampled back along its flight curve. */
+  writePath(r: number, camera: Camera, p: Projectile, width: number): void {
+    const H = this.history
+    const h = r * SEG * 3
+    for (let s = 0; s < SEG; s += 1) {
+      pathPosition(p, Math.max(0, p.t - (s / (SEG - 1)) * PATH_SPAN), _p)
+      H[h + s * 3] = _p.x
+      H[h + s * 3 + 1] = _p.y
+      H[h + s * 3 + 2] = _p.z
+    }
+    this.filled[r] = 1
+    this.build(r, camera, p.trail, width)
+  }
+
+  /** A player's trail: the last SEG positions, one per frame. */
   write(r: number, camera: Camera, x: number, y: number, z: number, trail: number, width: number): void {
     const H = this.history
-    const P = this.positions
-    const C = this.colors
     const h = r * SEG * 3
     if (!this.filled[r]) {
       for (let s = 0; s < SEG; s += 1) {
@@ -98,6 +111,15 @@ class RibbonBuffers {
       H[h + 1] = y
       H[h + 2] = z
     }
+    this.build(r, camera, trail, width)
+  }
+
+  /** Turns ribbon r's history points into a camera-facing, tapering strip. */
+  private build(r: number, camera: Camera, trail: number, width: number): void {
+    const H = this.history
+    const P = this.positions
+    const C = this.colors
+    const h = r * SEG * 3
     const head = HEADS[trail] ?? HEADS[0]
     const tail = TAILS[trail] ?? TAILS[0]
     for (let s = 0; s < SEG; s += 1) {
@@ -174,13 +196,7 @@ function Ribbons({ players }: { players: boolean }) {
         buffers.hide(i)
         continue
       }
-      if (buffers.lastId[i] !== p.id) {
-        // A new throw reused this slot: start a fresh ribbon.
-        buffers.lastId[i] = p.id
-        buffers.reset(i)
-      }
-      projectilePosition(p, _p)
-      buffers.write(i, camera, _p.x, _p.y, _p.z, p.trail, 0.32)
+      buffers.writePath(i, camera, p, 0.42)
     }
 
     const data = game().data
@@ -200,9 +216,7 @@ function Ribbons({ players }: { players: boolean }) {
 }
 
 export function TrailRibbons() {
-  const boomerangTrails = useQuality((s) => s.settings.boomerangTrails)
   const playerTrails = useQuality((s) => s.settings.playerTrails)
-  if (!boomerangTrails) return null
   return <Ribbons players={playerTrails} />
 }
 

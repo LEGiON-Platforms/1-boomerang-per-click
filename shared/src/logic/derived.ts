@@ -13,8 +13,8 @@ import {
   STAGE_COUNT,
 } from '../config/economy'
 import { TRAINING_PADS, isPadUnlocked } from '../config/pads'
-import { EGGS, type EggDef, petBonus, petSlots } from '../config/pets'
-import { BOOSTS, type BoostId, FRIEND_BOOST, GEM_SHOP, STARTER_PACK_WINDOW_MINUTES } from '../config/retention'
+import { type EggDef, petBonus, petSlots } from '../config/pets'
+import { BOOSTS, type BoostId, FRIEND_BOOST, STARTER_PACK_WINDOW_MINUTES } from '../config/retention'
 import { TRAILS } from '../config/trails'
 import type { PetInstance, PlayerData } from '../types'
 
@@ -133,15 +133,6 @@ export function isEggUnlocked(d: PlayerData, egg: EggDef): boolean {
   return d.bestStageEver >= egg.unlockStage
 }
 
-/** Best wins-priced egg the player has unlocked (lucky blocks and gift eggs). */
-export function bestUnlockedEgg(d: PlayerData): EggDef {
-  let best = EGGS[0]
-  for (const egg of EGGS) {
-    if (egg.currency === 'wins' && isEggUnlocked(d, egg)) best = egg
-  }
-  return best
-}
-
 /** 0..1 towards the next rebirth's level (fractional levels, from level 1). */
 export function rebirthProgressForXp(xp: number, rebirths: number): number {
   const level = levelForXp(xp) + levelProgress(xp)
@@ -163,6 +154,3 @@ export function starterPackSecondsLeft(d: PlayerData, now: number): number {
   return Math.max(0, (end - now) / 1000)
 }
 
-export function gemItemCost(id: keyof typeof GEM_SHOP): number {
-  return GEM_SHOP[id].cost
-}

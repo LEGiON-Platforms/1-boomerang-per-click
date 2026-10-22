@@ -30,7 +30,7 @@ import {
   vGradient,
 } from '../canvasText'
 import { buildSignAtlas, type SignAtlas, type SignSpec } from '../signs'
-import { displayStart, isBackRow } from './boomerangDisplay'
+import { displayStart } from './boomerangDisplay'
 
 /** Font and icon images must be ready before anything is drawn into a canvas. */
 export function useCanvasAssets(): boolean {
@@ -135,7 +135,7 @@ function buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }: SignInputs): 
   })
 
   // Boomerang Stage: a header, then "+Power / price / name" over every display.
-  specs.push({ w: 18, h: 3.6, x: 43.6, y: 14.5, z: 33, rotY: -Math.PI / 2, draw: header('BOOMERANGS', 'bolt') })
+  specs.push({ w: 18, h: 3.6, x: 43.6, y: 9.5, z: 33, rotY: -Math.PI / 2, draw: header('BOOMERANGS', 'bolt') })
   const start = displayStart(boomerangsOwned)
   BOOMERANG_SPOTS.forEach((p, i) => {
     const b = BOOMERANGS[start + i]
@@ -143,11 +143,11 @@ function buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }: SignInputs): 
     const owned = b.id < boomerangsOwned
     const isNext = b.id === boomerangsOwned
     specs.push({
-      w: 3.8,
-      h: 2,
-      x: p.x,
-      // The back row's displays float above the front row's signs.
-      y: p.y + (isBackRow(i) ? 7.9 : 4.3),
+      // A low plaque at the front of each pad; the boomerang floats just above it.
+      w: 3.2,
+      h: 1.7,
+      x: p.x - 1.4,
+      y: p.y + 1.05,
       z: p.z,
       rotY: -Math.PI / 2,
       draw: (ctx, w, h) => {
@@ -203,7 +203,6 @@ function buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }: SignInputs): 
   })
 
   // Eggs.
-  specs.push({ w: 13, h: 2.8, x: -4, y: 10, z: 60.5, rotY: Math.PI, draw: header('TRAINERS', 'trophy') })
   EGGS.forEach((egg, i) => {
     const spot = EGG_SPOTS[i]
     const locked = bestStage < egg.unlockStage
@@ -214,7 +213,7 @@ function buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }: SignInputs): 
       x: spot.x,
       y: isEvent ? 7.6 : 5.4,
       z: spot.z,
-      rotY: Math.PI,
+      rotY: faceToward(spot, SPAWN),
       draw: (ctx, w, h) => {
         drawOutlined(ctx, egg.name, w / 2, h * 0.22, h * 0.24, '#ffffff', { maxWidth: w - 6 })
         if (locked) {
@@ -228,7 +227,7 @@ function buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }: SignInputs): 
     })
   })
   const ev = EGG_SPOTS[EGGS.findIndex((e) => e.id === 'event')]
-  specs.push({ w: 10, h: 2.4, x: ev.x, y: 10.4, z: ev.z, rotY: Math.PI, draw: header('HALLOWEEN', 'pumpkin') })
+  specs.push({ w: 10, h: 2.4, x: ev.x, y: 10.4, z: ev.z, rotY: faceToward(ev, SPAWN), draw: header('HALLOWEEN', 'pumpkin') })
 
   // Invite board and like goal.
   specs.push({

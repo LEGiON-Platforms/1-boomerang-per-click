@@ -6,7 +6,7 @@
  * The lobby is the rectangle at z >= 0; the corridor runs from z = 0 to negative z.
  */
 
-import { STAGE_COUNT, WALLS_PER_STAGE } from './config/economy'
+import { WALLS_PER_STAGE } from './config/economy'
 
 export interface Vec2 {
   x: number
@@ -96,15 +96,8 @@ export function boomerangPadAt(p: Vec2): number {
   return -1
 }
 
-/** Eggs, in EGGS order (yellow, blue, red, purple, black, event). */
-export const EGG_SPOTS: readonly Vec2[] = [
-  { x: -22, z: 58 },
-  { x: -13, z: 58 },
-  { x: -4, z: 58 },
-  { x: 5, z: 58 },
-  { x: 14, z: 58 },
-  { x: 26, z: 58 },
-]
+/** Eggs, in EGGS order: the Halloween Egg, at the front right of the stage gate. */
+export const EGG_SPOTS: readonly Vec2[] = [{ x: 15, z: 9 }]
 
 export const TRAILS_STALL: Vec2 = { x: -15, z: 9 }
 export const REBIRTH_STATUE: Vec2 = { x: 16, z: 40 }
@@ -176,9 +169,21 @@ export const PAD_OFFSET = 75
 export const PAD_SIZE = { w: 6, d: 6 } as const
 export const PAD_X = -(REWARD_ROOM.halfWidth - PAD_SIZE.w / 2 - 0.5)
 
-/** z of the entrance line of a stage (where its run starts). */
-export function stageStartZ(stage: number): number {
-  return -(stage - 1) * STAGE_LENGTH - 4
+/**
+ * Every stage is played in the same corridor: what a player sees there are the
+ * walls of *their own* current stage (per-player walls, like the original). So
+ * the stage only changes the walls' material and HP, never where things are.
+ */
+export const CORRIDOR_START_Z = -4
+
+/** z of the entrance line of the corridor (where every run starts). */
+export function stageStartZ(_stage = 1): number {
+  return CORRIDOR_START_Z
+}
+
+/** Whether `z` is down the stage corridor (past its entrance), not in the lobby. */
+export function inCorridor(z: number): boolean {
+  return z <= CORRIDOR_START_Z
 }
 
 /** z of wall `wall` (1..10) of `stage`. */
@@ -190,9 +195,9 @@ export function padZ(stage: number): number {
   return stageStartZ(stage) - PAD_OFFSET
 }
 
-/** The gate at the end of `stage`, which is also the entrance of `stage + 1`. */
-export function gateZ(stage: number): number {
-  return stageStartZ(stage + 1)
+/** The closed end of the corridor, behind the reward room. */
+export function gateZ(_stage = 1): number {
+  return CORRIDOR_START_Z - STAGE_LENGTH
 }
 
 /** Where a teleport into `stage` lands the player. */
@@ -200,25 +205,17 @@ export function stageSpawn(stage: number): { x: number; z: number; rotY: number 
   return { x: 0, z: stageStartZ(stage) - 2, rotY: Math.PI }
 }
 
-/** How far past its stage's entrance `z` lies (0..STAGE_LENGTH); negative in the lobby. */
+/** How far down the corridor `z` lies (0 at the entrance); negative in the lobby. */
 function depthIntoStage(z: number): number {
-  const d = stageStartZ(1) - z
-  return d < 0 ? d : d % STAGE_LENGTH
+  return CORRIDOR_START_Z - z
 }
 
-/** Whether `z` lies inside some stage's reward room. */
+/** Whether `z` lies inside the reward room at the end of the corridor. */
 export function inRewardRoom(z: number): boolean {
   return depthIntoStage(z) >= REWARD_ROOM.startOffset
 }
 
-/** Which stage area `z` lies in; 0 for the lobby. */
-export function stageAtZ(z: number): number {
-  if (z > stageStartZ(1)) return 0
-  const s = Math.floor((stageStartZ(1) - z) / STAGE_LENGTH) + 1
-  return Math.min(Math.max(s, 1), STAGE_COUNT)
-}
-
-/** Lucky block drop spots: around the lobby plus the entrance area of early stages. */
+/** Lucky block drop spots: around the lobby plus the corridor entrance. */
 export const LUCKY_SPOTS: readonly Vec2[] = [
   { x: -8, z: 36 },
   { x: 10, z: 50 },
@@ -228,10 +225,11 @@ export const LUCKY_SPOTS: readonly Vec2[] = [
   { x: 27, z: 54 },
   { x: 0, z: 12 },
   { x: -6, z: 46 },
-  ...[1, 2, 3, 4, 5].map((s) => ({ x: s % 2 === 0 ? 4 : -4, z: stageStartZ(s) - 5 })),
+  { x: -4, z: CORRIDOR_START_Z - 5 },
+  { x: 4, z: CORRIDOR_START_Z - 5 },
 ]
 
-/** Halloween pumpkin spawn points: scattered over the lobby, one per stage entrance. */
+/** Halloween pumpkin spawn points: scattered over the lobby, three at the corridor entrance. */
 export const PUMPKIN_SPOTS: readonly Vec2[] = [
   { x: -6, z: 32 },
   { x: 8, z: 18 },
@@ -245,7 +243,9 @@ export const PUMPKIN_SPOTS: readonly Vec2[] = [
   { x: 28, z: 62 },
   { x: 0, z: 40 },
   { x: -26, z: 40 },
-  ...Array.from({ length: STAGE_COUNT }, (_, i) => ({ x: (i % 3) * 5 - 5, z: stageStartZ(i + 1) - 6 })),
+  { x: -5, z: CORRIDOR_START_Z - 6 },
+  { x: 0, z: CORRIDOR_START_Z - 6 },
+  { x: 5, z: CORRIDOR_START_Z - 6 },
 ]
 
 /* ---------------------------------------------------------------------------
@@ -298,7 +298,7 @@ export function constrainPosition(x: number, z: number, run: RunBarrier): Vec2 {
     // the room's edge if that's the shorter way out, else slide along the corridor wall.
     const depth = depthIntoStage(bz)
     const toRoomStart = REWARD_ROOM.startOffset - depth + r
-    const toRoomEnd = stageAtZ(bz) > 1 ? depth + r : Infinity
+    const toRoomEnd = Infinity // nothing before the corridor's entrance
     const dx = Math.abs(x) - narrow
     if (Math.min(toRoomStart, toRoomEnd) < dx) {
       bz = toRoomStart <= toRoomEnd ? bz - toRoomStart : bz + toRoomEnd

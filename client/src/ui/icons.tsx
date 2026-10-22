@@ -46,15 +46,6 @@ export function PumpkinIcon({ size, className, style }: IconProps) {
   )
 }
 
-export function GemIcon({ size, className, style }: IconProps) {
-  return (
-    <svg viewBox="0 0 64 64" style={{ ...box(size), ...style }} className={className}>
-      <path d="M32 4l24 14v28L32 60 8 46V18z" fill="#3ee0b4" stroke={STROKE} strokeWidth="4" strokeLinejoin="round" />
-      <path d="M32 16l14 8v16l-14 8-14-8V24z" fill="#c8fff0" stroke="#1d9c7c" strokeWidth="3" />
-    </svg>
-  )
-}
-
 export function PowerBurstIcon({ size, className, style }: IconProps) {
   const pts = Array.from({ length: 16 }, (_, i) => {
     const a = (i / 16) * Math.PI * 2 - Math.PI / 2

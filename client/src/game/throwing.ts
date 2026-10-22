@@ -5,7 +5,7 @@ import {
   formatNumber,
   isPadUnlocked,
   padAtPosition,
-  stageAtZ,
+  inCorridor,
   stageDef,
   TARGET,
   THROW,
@@ -57,7 +57,7 @@ export function computeTarget(): typeof target {
   }
   target.pad = -1
   const run = g.run
-  if (stageAtZ(p.z) === run.stage && run.wallsBroken < WALLS_PER_STAGE) {
+  if (inCorridor(p.z) && run.wallsBroken < WALLS_PER_STAGE) {
     const wz = wallZ(run.stage, run.wallsBroken + 1)
     const distance = p.z - wz
     if (distance >= -1 && distance <= THROW.range) {

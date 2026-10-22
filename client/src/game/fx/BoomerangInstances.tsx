@@ -19,7 +19,7 @@ import { game } from '../../state/gameStore'
 import { type Preset, useQuality } from '../../state/qualityStore'
 import { buildBoomerangGeometry, createBoomerangMaterial, holdPose, setBoomerangTime } from '../boomerangModel'
 import { type BoomerangLook, boomerangLook, SHAPE_KEYS } from '../boomerangShapes'
-import { displayStart, isBackRow } from '../lobby/boomerangDisplay'
+import { displayStart } from '../lobby/boomerangDisplay'
 import { heldBoomerang, localPlayer, now, THROW_ANIM_S, throwFlatness } from '../runtime'
 import { PROJECTILE_CAPACITY, projectilePosition, projectiles, stepProjectiles } from './projectiles'
 
@@ -180,14 +180,15 @@ export function BoomerangInstances() {
     setBoomerangTime(t)
     set.begin()
 
-    // Boomerang Stage: one big boomerang standing over each buy pad (the back row
-    // floating higher), turning slowly to face the lobby, and the VIP one on its podium.
+    // Boomerang Stage: one big boomerang standing over each buy pad, turning slowly
+    // to face the lobby, and the VIP one on its podium.
     const data = game().data
     if (localPlayer.pos.z > DISPLAY_CULL_Z) {
       const start = displayStart(data?.boomerangsOwned ?? 1)
       for (let i = 0; i < BOOMERANG_SPOTS.length; i += 1) {
         const spot = BOOMERANG_SPOTS[i]
-        _o.position.set(spot.x, spot.y + (isBackRow(i) ? 5.6 : 2.2) + Math.sin(t * 2 + i) * 0.15, spot.z)
+        // Both rows float at the same height over their pads (the back tier is one step up).
+        _o.position.set(spot.x, spot.y + 3.3 + Math.sin(t * 2 + i) * 0.15, spot.z)
         _o.rotation.set(Math.PI / 2 - 0.2, -Math.PI / 2 + Math.sin(t * 0.8 + i) * 0.6, 0, 'YXZ')
         _o.scale.setScalar(1.6)
         set.add(boomerangLook(start + i))
@@ -211,11 +212,14 @@ export function BoomerangInstances() {
     for (let r = 0; r < remoteList.length && r < MAX_CLIENTS; r += 1) {
       const p = remoteList[r]
       const throwing = t - p.throwAt < THROW_ANIM_S
-      _p.set(
-        p.px - Math.cos(p.prot) * 0.62 + Math.sin(p.prot) * 0.3,
-        p.py + (throwing ? 2.1 : 1.35),
-        p.pz + Math.sin(p.prot) * 0.62 + Math.cos(p.prot) * 0.3,
-      )
+      if (p.full && t - p.handAt < 0.2) _p.copy(p.hand) // their avatar's real hand
+      else {
+        _p.set(
+          p.px - Math.cos(p.prot) * 0.62 + Math.sin(p.prot) * 0.3,
+          p.py + (throwing ? 2.1 : 1.35),
+          p.pz + Math.sin(p.prot) * 0.62 + Math.cos(p.prot) * 0.3,
+        )
+      }
       const look = boomerangLook(p.boomerang, p.vip)
       poseHeld(_p, p.prot, look, throwing ? throwFlatness((t - p.throwAt) / THROW_ANIM_S) : 0)
       set.add(look)

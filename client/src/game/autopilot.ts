@@ -1,4 +1,4 @@
-import { C2S, PAD_X, padZ, stageAtZ, wallZ, WALLS_PER_STAGE } from '@game/shared'
+import { C2S, inCorridor, PAD_X, padZ, wallZ, WALLS_PER_STAGE } from '@game/shared'
 
 import { send } from '../net/connection'
 import { game, useGame } from '../state/gameStore'
@@ -25,7 +25,7 @@ export function tickAutopilot(): void {
   const nowMs = performance.now()
 
   // Get into the active stage first.
-  if (stageAtZ(p.z) !== run.stage) {
+  if (!inCorridor(p.z)) {
     autopilot.active = false
     if (nowMs - lastTeleportAt > 3000) {
       lastTeleportAt = nowMs

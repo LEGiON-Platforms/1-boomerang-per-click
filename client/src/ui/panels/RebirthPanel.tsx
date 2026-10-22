@@ -79,7 +79,7 @@ export function RebirthPanel() {
             <div className="txt-outline text-[26px]" style={{ color: '#7dff6b' }}>
               You will keep
             </div>
-            <div className="body-text text-[17px]">Boomerangs · Trails · Pets · Pumpkins · Gems · Rebirths</div>
+            <div className="body-text text-[17px]">Boomerangs · Trails · Pets · Pumpkins · Perks · Rebirths</div>
           </div>
         </div>
         {unlocks.length > 0 && (

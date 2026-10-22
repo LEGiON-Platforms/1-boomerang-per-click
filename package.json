@@ -15,7 +15,6 @@
     "start": "npm run start -w server",
     "typecheck": "npm run typecheck -w shared && npm run typecheck -w server && npm run typecheck -w client && npm run typecheck -w tools",
     "simulate": "npm run simulate -w tools --",
-    "test:bots": "npm run bots -w tools --",
     "perf": "npm run perf -w tools --"
   },
   "overrides": {

@@ -15,7 +15,6 @@ export interface QualitySettings {
   shadowMapSize: number
   /** Max live particles; 0 disables particles entirely. */
   particles: number
-  boomerangTrails: boolean
   playerTrails: boolean
   clouds: boolean
   /** Camera far plane and fog end. */
@@ -29,8 +28,9 @@ export interface QualitySettings {
   nameTagDistance: number
   /** Render other players' pets. */
   remotePets: boolean
-  /** Stages rendered on each side of the current one. */
-  stageWindow: number
+  /** Nearest other players drawn as full Bloxity avatars (~6 draw calls each), and within what distance. */
+  remoteAvatars: number
+  remoteAvatarDistance: number
   /**
    * Lighter HUD effects: fast taps merge into one flying "+X" every 350 ms, HUD
    * numbers refresh every 200 ms and the Power counter doesn't bump (fewer DOM
@@ -46,7 +46,6 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     shadows: false,
     shadowMapSize: 512,
     particles: 0,
-    boomerangTrails: false,
     playerTrails: false,
     clouds: false,
     viewDistance: 140,
@@ -55,7 +54,8 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     signPpu: 16,
     nameTagDistance: 25,
     remotePets: false,
-    stageWindow: 0,
+    remoteAvatars: 3,
+    remoteAvatarDistance: 30,
     lightHud: true,
   },
   MEDIUM: {
@@ -64,7 +64,6 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     shadows: true,
     shadowMapSize: 1024,
     particles: 80,
-    boomerangTrails: true,
     playerTrails: false,
     clouds: true,
     viewDistance: 260,
@@ -73,7 +72,8 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     signPpu: 28,
     nameTagDistance: 45,
     remotePets: true,
-    stageWindow: 1,
+    remoteAvatars: 5,
+    remoteAvatarDistance: 45,
     lightHud: false,
   },
   HIGH: {
@@ -82,7 +82,6 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     shadows: true,
     shadowMapSize: 2048,
     particles: 160,
-    boomerangTrails: true,
     playerTrails: true,
     clouds: true,
     viewDistance: 420,
@@ -91,7 +90,8 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     signPpu: 32,
     nameTagDistance: 60,
     remotePets: true,
-    stageWindow: 1,
+    remoteAvatars: 7,
+    remoteAvatarDistance: 70,
     lightHud: false,
   },
 }

@@ -4,12 +4,11 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import BloxityProvider from './bloxity/BloxityProvider.jsx'
 import { connect } from './net/connection'
-import { getSavedName } from './net/identity'
+import { getOrCreateName } from './net/identity'
 import './index.css'
 
-// Returning players: start matchmaking now, in parallel with React's first render.
-const savedName = getSavedName()
-if (savedName) void connect(savedName)
+// No name screen: start matchmaking right away, in parallel with React's first render.
+void connect(getOrCreateName())
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

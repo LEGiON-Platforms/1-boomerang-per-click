@@ -25,7 +25,6 @@ import { PropBuilder } from '../builder'
 import { localPlayer } from '../runtime'
 import { createStudTexture, createWorldBoxGeometry, createWorldPlaneGeometry } from '../textures'
 import { Dummies } from './Dummies'
-import { EggBlocks } from './EggBlocks'
 import { Leaderboards } from './Leaderboards'
 import { LobbySigns } from './LobbySigns'
 import { buildPaving } from './paving'
@@ -132,12 +131,6 @@ function buildProps(): BufferGeometry {
   b.cylinder(rx, 0.6, rz, 1.5, 1.4, '#7b3dff', 20)
   b.cylinder(rx, 2, rz, 1.8, 0.3, '#5b2a8f', 20)
 
-  // Egg pedestals.
-  EGG_SPOTS.forEach((e, i) => {
-    if (EGGS[i].id === 'event') return
-    b.cylinder(e.x, 0, e.z, 1.6, 0.5, '#41444f', 20)
-    b.cylinder(e.x, 0.5, e.z, 1.35, 0.3, '#6b6f7d', 20)
-  })
   // Halloween egg: a witch-hat pumpkin stack.
   const ev = EGG_SPOTS[EGGS.findIndex((e) => e.id === 'event')]
   b.cylinder(ev.x, 0, ev.z, 2.2, 0.5, '#4a1f6e', 20)
@@ -261,7 +254,6 @@ export function Lobby() {
       <mesh geometry={geometries.props} material={materials.props} castShadow receiveShadow />
       <mesh geometry={geometries.glow} material={materials.glow} />
       <Dummies />
-      <EggBlocks />
       <LobbySigns />
       <NextBoomerangGlow />
       <Leaderboards />

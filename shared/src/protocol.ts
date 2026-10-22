@@ -7,7 +7,7 @@
  */
 
 import type { EggId, Rarity } from './config/pets'
-import type { BadgeId, GemItemId } from './config/retention'
+import type { BadgeId, PerkId } from './config/retention'
 import type { ErrorCode } from './errors'
 import type { RewardSummary } from './logic/actions'
 import type { PetInstance, PlayerData } from './types'
@@ -42,6 +42,59 @@ export function sanitizeName(raw: unknown): string {
 }
 
 /* ---------------------------------------------------------------------------
+ * Bloxity avatar looks, relayed so every player sees everyone's real avatar
+ * ------------------------------------------------------------------------- */
+
+/** Equipped-cosmetic id keys from the Bloxity SDK's avatar.getEquipped(). */
+export const AVATAR_ID_KEYS = [
+  'hatId', 'backId', 'skinId', 'headId', 'armLId', 'armRId', 'legLId', 'legRId', 'torsoId',
+  'hairId', 'maskId', 'neckId', 'chestId', 'waistId', 'handId', 'shoesId', 'pantsId', 'shirtId', 'faceId',
+] as const
+/** Body proportions from avatar.getProportions(). */
+export const AVATAR_PROPORTION_KEYS = [
+  'height', 'shoulderWidth', 'armLength', 'legOffsetX', 'torsoScaleX', 'neckHeight', 'headScale',
+] as const
+
+export interface AvatarLook {
+  /** Equipped ids, only the slots that are set. */
+  e: Partial<Record<(typeof AVATAR_ID_KEYS)[number], string>>
+  /** Proportions, only those that differ from 1. */
+  p: Partial<Record<(typeof AVATAR_PROPORTION_KEYS)[number], number>>
+}
+
+const AVATAR_ID = /^[A-Za-z0-9_-]{1,48}$/
+
+/** Validates a look from a client and returns it as compact JSON ('' if unusable). */
+export function sanitizeAvatarLook(raw: unknown): string {
+  if (!raw || typeof raw !== 'object') return ''
+  const src = raw as { e?: Record<string, unknown>; p?: Record<string, unknown> }
+  const look: AvatarLook = { e: {}, p: {} }
+  for (const key of AVATAR_ID_KEYS) {
+    const v = src.e?.[key]
+    if (v === undefined || v === null) continue
+    const id = String(v)
+    if (AVATAR_ID.test(id) && id !== '-1') look.e[key] = id
+  }
+  for (const key of AVATAR_PROPORTION_KEYS) {
+    const v = Number(src.p?.[key])
+    if (!Number.isFinite(v) || v === 1) continue
+    look.p[key] = Math.round(Math.min(2, Math.max(0.5, v)) * 1000) / 1000
+  }
+  return JSON.stringify(look)
+}
+
+/** Parses a relayed look ('' or bad JSON = the default avatar). */
+export function parseAvatarLook(json: string): AvatarLook {
+  if (!json) return { e: {}, p: {} }
+  try {
+    const look = JSON.parse(json) as AvatarLook
+    return { e: look.e ?? {}, p: look.p ?? {} }
+  } catch {
+    return { e: {}, p: {} }
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * Client → server
  * ------------------------------------------------------------------------- */
 
@@ -67,10 +120,11 @@ export const C2S = {
   teleportPad: 'teleportPad',
   claimLuckyBlock: 'claimLuckyBlock',
   collectPumpkin: 'collectPumpkin',
-  buyGemItem: 'buyGemItem',
+  buyPerk: 'buyPerk',
   addFriend: 'addFriend',
   removeFriend: 'removeFriend',
   setName: 'setName',
+  setAvatar: 'setAvatar',
   rollTutorialReward: 'rollTutorialReward',
   requestSync: 'requestSync',
 } as const
@@ -193,7 +247,7 @@ export interface EggResultMsg {
   free: boolean
 }
 
-export type RewardSource = 'gift' | 'daily' | 'quest' | 'code' | 'gem' | 'lucky'
+export type RewardSource = 'gift' | 'daily' | 'quest' | 'code' | 'perk' | 'lucky'
 
 export interface RewardMsg {
   source: RewardSource
@@ -233,8 +287,8 @@ export interface OfflineMsg {
 }
 
 export interface PurchaseMsg {
-  kind: 'boomerang' | 'trail' | 'gem'
-  id: number | GemItemId
+  kind: 'boomerang' | 'trail' | 'perk'
+  id: number | PerkId
 }
 
 export interface TutorialRewardMsg {

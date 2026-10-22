@@ -1,3 +1,5 @@
+import { Vector3 } from 'three'
+
 /**
  * Other players in the room, fed by Colyseus state callbacks and read by the
  * renderers every frame. Positions are buffered and drawn ~120 ms in the past so
@@ -26,6 +28,13 @@ export interface RemotePlayer {
   level: number
   rebirths: number
   pets: string[]
+  /** Bloxity look as relayed JSON (see AvatarLook). */
+  avatar: string
+  /** Drawn as a full Bloxity avatar this frame (chosen by the logic tick). */
+  full: boolean
+  /** Right-hand world position from the full avatar's rig (valid when handAt is recent). */
+  hand: Vector3
+  handAt: number
   /** Clock time (s) of this player's last throw, for the animation. */
   throwAt: number
   /** Interpolated pose, written by RemotePlayers each frame. */
@@ -78,6 +87,10 @@ export function createRemote(sessionId: string, name: string, pid: string, x: nu
     level: 1,
     rebirths: 0,
     pets: [],
+    avatar: '',
+    full: false,
+    hand: new Vector3(),
+    handAt: -10,
     throwAt: -10,
     px: x,
     py: y,

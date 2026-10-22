@@ -3,7 +3,6 @@
 export const ERRORS = {
   not_enough_wins: 'Not enough Wins!',
   level_too_low: 'Reach the next rebirth level first!',
-  not_enough_gems: 'Not enough Gems!',
   not_enough_pumpkins: 'Not enough Pumpkins!',
   all_owned: 'You already own them all!',
   already_owned: 'Already owned!',
