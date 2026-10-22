@@ -284,25 +284,9 @@ const StageWalls = memo(function StageWalls({ stage }: { stage: number }) {
     warm.current = 1
   }, [shatterMat, shatterUniforms])
 
-  // Walls stay down for a few seconds after a win pad's trip to the lobby (wallHold),
-  // then rise again one after another.
-  // Mounted mid-hold (the stage window changes on the respawn): start held.
-  const [held, setHeld] = useState(() => wallHold.until !== 0)
-  useEffect(() => {
-    const on = () => setHeld(true)
-    wallHold.listeners.add(on)
-    return () => {
-      wallHold.listeners.delete(on)
-    }
-  }, [])
-  useEffect(() => {
-    if (!held) return
-    const id = window.setInterval(() => {
-      // Time's up, or the player is heading into the corridor: build them back now.
-      if (!wallHoldActive()) setHeld(false)
-    }, 200)
-    return () => window.clearInterval(id)
-  }, [held])
+  // Walls stay down for a few seconds after a win pad's trip to the lobby, then rise
+  // again one after another.
+  const held = useWallHeld()
   const downByHold = held && stage <= wallHold.stages
   const broken = downByHold ? WALLS_PER_STAGE : stage < run.stage ? WALLS_PER_STAGE : stage === run.stage ? run.wallsBroken : 0
   const locked = stage > unlocked
@@ -397,6 +381,31 @@ const StageWalls = memo(function StageWalls({ stage }: { stage: number }) {
     </>
   )
 })
+
+/**
+ * True while a win pad's walls are held down (see wallHold in runtime.ts). Polled
+ * from a timer, never from the frame loop.
+ */
+function useWallHeld(): boolean {
+  // Mounted mid-hold (the stage window changes on the respawn): start held.
+  const [held, setHeld] = useState(() => wallHold.until !== 0)
+  useEffect(() => {
+    const on = () => setHeld(true)
+    wallHold.listeners.add(on)
+    return () => {
+      wallHold.listeners.delete(on)
+    }
+  }, [])
+  useEffect(() => {
+    if (!held) return
+    const id = window.setInterval(() => {
+      // Time's up, or the player is heading into the corridor: build them back now.
+      if (!wallHoldActive()) setHeld(false)
+    }, 200)
+    return () => window.clearInterval(id)
+  }, [held])
+  return held
+}
 
 /** Cracks spreading over the whole active wall as its HP drops. */
 function CrackOverlay() {
@@ -557,7 +566,9 @@ function PadTrophies({ stages }: { stages: number[] }) {
 function RunLabels({ stages }: { stages: number[] }) {
   const run = useGame((s) => s.run)
   const data = useGame((s) => s.data)
-  if (!stages.includes(run.stage) || !data) return null
+  // No labels floating in an empty corridor while the walls are held down.
+  const held = useWallHeld()
+  if (!stages.includes(run.stage) || !data || (held && run.stage <= wallHold.stages)) return null
   const def = stageDef(run.stage)
   const wallActive = run.wallsBroken < WALLS_PER_STAGE
   const wins = Math.floor(padWins(run.stage) * winsMultiplier(data, serverNow()))

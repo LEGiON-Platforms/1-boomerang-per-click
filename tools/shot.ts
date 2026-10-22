@@ -128,9 +128,9 @@ if (stepsArg === 'clear' || stepsArg === 'all') {
   await sleep(800)
   console.log('walls down?', await page.evaluate('JSON.stringify(window.__bpcRuntime.wallHold)'))
   await shot(page, '05-lobby-walls-down')
-  await sleep(2500)
+  await sleep(4400)
   await shot(page, '05-lobby-walls-rising')
-  await sleep(3500)
+  await sleep(2500)
   console.log('walls rebuilt?', await page.evaluate('JSON.stringify(window.__bpcRuntime.wallHold)'))
   await shot(page, '05-lobby-walls-rebuilt')
 }
