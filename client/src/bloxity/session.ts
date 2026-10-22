@@ -43,6 +43,8 @@ export interface PlayerAvatarProps {
   onReady?: () => void
   onRig?: (rig: AvatarRig) => void
   targetHeight?: number
+  /** `skipRef.current = n` poses the rig only every n-th frame (far-away players). */
+  skipRef?: RefObject<number>
   motionRef?: RefObject<{ time: number; speed: number; grounded: boolean; maxSpeed: number; velY?: number; throwPhase: number }>
 }
 

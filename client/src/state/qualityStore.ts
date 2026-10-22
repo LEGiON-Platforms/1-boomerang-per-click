@@ -56,8 +56,8 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     signPpu: 44,
     nameTagDistance: 25,
     remotePets: false,
-    remoteAvatars: 3,
-    remoteAvatarDistance: 30,
+    remoteAvatars: 7,
+    remoteAvatarDistance: 1000,
     lightHud: true,
   },
   MEDIUM: {
@@ -74,8 +74,8 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     signPpu: 52,
     nameTagDistance: 45,
     remotePets: true,
-    remoteAvatars: 5,
-    remoteAvatarDistance: 45,
+    remoteAvatars: 7,
+    remoteAvatarDistance: 1000,
     lightHud: false,
   },
   HIGH: {
@@ -93,7 +93,7 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     nameTagDistance: 60,
     remotePets: true,
     remoteAvatars: 7,
-    remoteAvatarDistance: 70,
+    remoteAvatarDistance: 1000,
     lightHud: false,
   },
 }

@@ -56,7 +56,7 @@ function fallbackMotion(delta) {
  *   rescaled rather than trusted at native size.
  */
 export const PlayerAvatar = forwardRef(function PlayerAvatar(
-  { onReady, onRig, targetHeight = 1.8, motionRef, look, ...props },
+  { onReady, onRig, targetHeight = 1.8, motionRef, look, skipRef, ...props },
   ref,
 ) {
   // `look` (another player's relayed AvatarLook) overrides the local Bloxity session.
@@ -208,7 +208,11 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
   const proportionsRef = useRef(proportions)
   proportionsRef.current = proportions
 
+  // `skipRef.current = n` poses the rig only every n-th frame (far-away players).
+  const frameCount = useRef(0)
   useFrame((_state, delta) => {
+    const every = skipRef?.current ?? 0
+    if (every > 1 && (frameCount.current += 1) % every !== 0) return
     try {
       // Order matters: proportions reset every bone to its rest pose, and the
       // animation then rotates on top of that clean base.
