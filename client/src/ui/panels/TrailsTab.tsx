@@ -4,9 +4,7 @@ import { useEffect, useRef } from 'react'
 import { playSfx } from '../../audio/sfx'
 import { send } from '../../net/connection'
 import { useGame } from '../../state/gameStore'
-import { ui } from '../../state/uiStore'
 import { HandIcon, TrophyIcon } from '../icons'
-import { Window } from '../Window'
 
 /** The swoosh preview drawn in each row, in the trail's own gradient. */
 export function TrailSwoosh({ colors, id }: { colors: readonly [string, string]; id: number }) {
@@ -24,7 +22,17 @@ export function TrailSwoosh({ colors, id }: { colors: readonly [string, string];
   )
 }
 
-export function TrailsPanel() {
+/** Shown under the Trails tab while the tutorial asks for the first trail. */
+export function TrailsTutorialFooter() {
+  return (
+    <div className="txt-outline flex items-center justify-center gap-3 text-[40px]" style={{ color: '#9cff3a' }}>
+      Click to buy! <HandIcon size={46} />
+    </div>
+  )
+}
+
+/** Shop tab: trails multiply Power and draw a ribbon behind thrown boomerangs. */
+export function TrailsTab() {
   const data = useGame((s) => s.data)
   const wins = useGame((s) => s.wins)
   const highlightRef = useRef<HTMLDivElement>(null)
@@ -36,17 +44,7 @@ export function TrailsPanel() {
 
   if (!data) return null
   return (
-    <Window
-      title="Trails"
-      onClose={() => ui().closePanel()}
-      footer={
-        tutorial ? (
-          <div className="txt-outline flex items-center justify-center gap-3 text-[40px]" style={{ color: '#9cff3a' }}>
-            Click to buy! <HandIcon size={46} />
-          </div>
-        ) : undefined
-      }
-    >
+    <>
       {TRAILS.map((t) => {
         const owned = data.trailsOwned.includes(t.id)
         const equipped = data.equippedTrail === t.id
@@ -98,6 +96,6 @@ export function TrailsPanel() {
           </div>
         )
       })}
-    </Window>
+    </>
   )
 }

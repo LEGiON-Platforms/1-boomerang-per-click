@@ -1,15 +1,15 @@
-import { C2S, padZ, stageAtZ, wallZ, WALLS_PER_STAGE } from '@game/shared'
+import { C2S, PAD_X, padZ, stageAtZ, wallZ, WALLS_PER_STAGE } from '@game/shared'
 
 import { send } from '../net/connection'
 import { game, useGame } from '../state/gameStore'
 import { autopilot, localPlayer } from './runtime'
 
 let lastTeleportAt = 0
-let farmSentForRun = ''
 
 /**
- * Auto Win: walks the current stage on its own — up to each wall (auto-throw does
- * the breaking), onto the win pad, then "Farm Again" — until switched off.
+ * Auto Win: plays the current stage on its own — up to each wall (auto-throw does
+ * the breaking), onto the win pad, then (after the lobby respawn) on to the next
+ * stage — until switched off.
  * Called by the 10 Hz logic tick.
  */
 export function tickAutopilot(): void {
@@ -40,13 +40,9 @@ export function tickAutopilot(): void {
     // Stand a few units in front of the next wall: well inside throw range.
     autopilot.z = wallZ(run.stage, run.wallsBroken + 1) + 5
   } else if (!run.padClaimed) {
+    autopilot.x = PAD_X
     autopilot.z = padZ(run.stage)
   } else {
-    autopilot.active = false
-    const key = `${run.stage}:${d.stats.padsClaimed}`
-    if (farmSentForRun !== key) {
-      farmSentForRun = key
-      send(C2S.stageChoice, { choice: 'farm' })
-    }
+    autopilot.active = false // waiting for the respawn
   }
 }

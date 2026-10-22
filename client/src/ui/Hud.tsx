@@ -1,26 +1,25 @@
 import { HudBottom, HudBottomLeft } from './hud/HudBottom'
 import { HudLeft } from './hud/HudLeft'
-import { HudOffers, HudTopRight } from './hud/HudRight'
-import { HudTop } from './hud/HudTop'
-import { HudTopLeft } from './hud/HudTopLeft'
+import { HudTopRight } from './hud/HudRight'
+import { TutorialDriver } from './hud/TutorialDriver'
 import { EggReveal } from './overlays/EggReveal'
 import { OfflinePopup, RewardPopup, TutorialRoll } from './overlays/Popups'
 import { StageClear } from './overlays/StageClear'
 import { PanelHost } from './PanelHost'
-import { ConfirmDialog, Toasts } from './Toasts'
+import { ConfirmDialog } from './ConfirmDialog'
 
-/** Everything drawn over the 3D view once the player is in the game. */
+/**
+ * Everything drawn over the 3D view once the player is in the game. The top-left
+ * corner is deliberately empty: hosts put their game logo there.
+ */
 export function Hud() {
   return (
     <div className="hud">
-      <HudTop />
-      <HudTopLeft />
+      <TutorialDriver />
       <HudLeft />
-      <HudOffers />
       <HudTopRight />
       <HudBottom />
       <HudBottomLeft />
-      <Toasts />
       <StageClear />
       <PanelHost />
       <RewardPopup />

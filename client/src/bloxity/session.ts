@@ -33,7 +33,8 @@ export interface BloxitySession {
 export const useBloxitySession = useBloxity as unknown as () => BloxitySession
 
 export interface AvatarRig {
-  bones: Record<string, { bone: import('three').Bone } | undefined>
+  /** axisX / axisZ: the character's X and Z axes in the bone's local frame. */
+  bones: Record<string, { bone: import('three').Bone; axisX?: import('three').Vector3; axisZ?: import('three').Vector3 } | undefined>
 }
 
 export interface PlayerAvatarProps {

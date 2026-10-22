@@ -30,7 +30,7 @@ export interface LuckyInfo {
   z: number
 }
 
-export type InteractKind = 'trails' | 'pedestal' | 'egg' | 'rebirth' | 'stages'
+export type InteractKind = 'trails' | 'pedestal' | 'egg' | 'rebirth'
 
 export interface InteractTarget {
   kind: InteractKind
@@ -61,8 +61,6 @@ interface GameStoreState {
   roomPlayers: RoomPlayerInfo[]
   /** Stage area the player stands in (0 = lobby). */
   stageHere: number
-  /** The stage corridor is (lazily) mounted while this is true. */
-  nearCorridor: boolean
   /** Training pad the player stands on (-1 = none). */
   onPad: number
   nearInteract: InteractTarget | null
@@ -101,7 +99,6 @@ export const useGame = create<GameStoreState>((set) => ({
   lucky: { phase: 0, secondsLeft: 0, x: 0, z: 0 },
   roomPlayers: [],
   stageHere: 0,
-  nearCorridor: false,
   onPad: -1,
   nearInteract: null,
   nearbyTags: [],

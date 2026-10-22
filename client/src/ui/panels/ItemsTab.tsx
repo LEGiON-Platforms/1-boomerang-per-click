@@ -17,12 +17,11 @@ import { useGame } from '../../state/gameStore'
 import { ui } from '../../state/uiStore'
 import { StarIcon } from '../icons'
 import { PetPortrait } from '../PetPortrait'
-import { Window } from '../Window'
 
 const bonusOf = (p: PetInstance) => petBonus(p.rarity, p.golden)
 
-/** Pet inventory: equip, equip best, merge 5 → golden, delete. */
-export function ItemsPanel() {
+/** Shop tab — pet inventory: equip, equip best, merge 5 → golden, delete. */
+export function ItemsTab() {
   const data = useGame((s) => s.data)
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -54,7 +53,7 @@ export function ItemsPanel() {
   const pet = data.pets.find((p) => p.uid === selected) ?? null
 
   return (
-    <Window title="Items" onClose={() => ui().closePanel()} width={960}>
+    <>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="txt-outline text-[24px]">
           Pets {data.pets.length}/{PETS_CONFIG.inventoryMax} · Equipped {data.equippedPets.length}/{slots} ·{' '}
@@ -167,6 +166,6 @@ export function ItemsPanel() {
         Merge 5 identical pets into a Golden one (x{PETS_CONFIG.goldenMult} bonus). Extra pet slots unlock at Rebirth{' '}
         {PETS_CONFIG.extraSlotRebirths.join(', ')}.
       </div>
-    </Window>
+    </>
   )
 }

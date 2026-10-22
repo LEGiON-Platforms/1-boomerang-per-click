@@ -18,8 +18,9 @@ import {
   BOOMERANGS,
   formatNumber,
   padWins,
+  LEVEL,
   REBIRTH,
-  rebirthCost,
+  rebirthLevel,
   STAGE_COUNT,
   stageTotalHp,
   TRAILS,
@@ -57,7 +58,7 @@ out.push(
   `  wallHP     = round(${WALL_HP.base} × Π growth(2..s) × (1 + ${WALL_HP.perWall} × (w-1))), ` +
     `growth tapers ${WALL_HP.earlyGrowth} → ${WALL_HP.lateGrowth} over ${WALL_HP.taper} stages`,
 )
-out.push(`  rebirth    = round(${REBIRTH.costBase} × ${REBIRTH.costGrowth}^r) wins`)
+out.push(`  rebirth n  = level ${REBIRTH.levelStep}·n; XP to level 2 = ${LEVEL.base}, growth ${LEVEL.earlyGrowth} → ${LEVEL.lateGrowth} over ${LEVEL.taper} levels`)
 out.push(`  boomerangs = ${BOOMERANGS.map((b) => formatNumber(b.cost)).join(', ')}`)
 out.push('')
 out.push('Stage | First cleared | Rebirths by then | Stage HP (10 walls) | Pad wins | Target')
@@ -70,11 +71,11 @@ for (let s = 1; s <= STAGE_COUNT; s += 1) {
   )
 }
 out.push('')
-out.push('Rebirth | At time   | Highest stage before | Cost')
+out.push('Rebirth | At time   | Highest stage before | Level')
 out.push('--------|-----------|----------------------|------')
 for (const r of rebirths.slice(0, 40)) {
   out.push(
-    `${String(r.r).padStart(7)} | ${fmtTime(r.t).padStart(9)} | ${String(r.stage).padStart(20)} | ${formatNumber(rebirthCost(r.r - 1))}`,
+    `${String(r.r).padStart(7)} | ${fmtTime(r.t).padStart(9)} | ${String(r.stage).padStart(20)} | ${rebirthLevel(r.r - 1)}`,
   )
 }
 out.push('')

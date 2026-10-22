@@ -8,14 +8,13 @@ import {
 import { useEffect, useRef } from 'react'
 
 import { playSfx } from '../../audio/sfx'
+import { boomerangLook } from '../../game/boomerangShapes'
 import { send } from '../../net/connection'
 import { useGame } from '../../state/gameStore'
-import { ui } from '../../state/uiStore'
 import { BoomerangIcon, LockIcon, TrophyIcon } from '../icons'
-import { Window } from '../Window'
 
-/** Boomerang shop: bought strictly in order, kept through Rebirth, best one auto-equipped. */
-export function ShopPanel() {
+/** Shop tab — boomerangs: bought strictly in order, kept through Rebirth, best one auto-equipped. */
+export function BoomerangsTab() {
   const data = useGame((s) => s.data)
   const wins = useGame((s) => s.wins)
   const nextRef = useRef<HTMLDivElement>(null)
@@ -26,13 +25,13 @@ export function ShopPanel() {
   const owned = data.boomerangsOwned
 
   return (
-    <Window title="Boomerangs" onClose={() => ui().closePanel()}>
+    <>
       <div className="body-text mb-3 text-center text-[18px]">
         Equipped gives <b>+{formatNumber(boomerangPower(data))} Power</b> per click. Owned boomerangs stay through Rebirth.
       </div>
       {data.vipBoomerang && (
         <div className="list-row highlight">
-          <BoomerangIcon size={60} color={VIP_BOOMERANG.color} />
+          <BoomerangIcon size={64} look={boomerangLook(0, true)} />
           <div className="flex-1">
             <div className="txt-outline text-[32px]" style={{ color: VIP_BOOMERANG.color }}>
               {VIP_BOOMERANG.name}
@@ -50,7 +49,7 @@ export function ShopPanel() {
         const isNext = b.id === owned
         return (
           <div key={b.id} ref={isNext ? nextRef : undefined} className={`list-row ${isNext ? 'highlight' : ''}`} style={{ opacity: b.id > owned ? 0.6 : 1 }}>
-            <BoomerangIcon size={60} color={b.color} style={b.glow > 0.4 ? { filter: `drop-shadow(0 0 8px ${b.color})` } : undefined} />
+            <BoomerangIcon size={64} look={boomerangLook(b.id)} />
             <div className="min-w-0 flex-1">
               <div className="txt-outline truncate text-[32px]" style={{ color: b.color }}>
                 {b.name}
@@ -91,6 +90,6 @@ export function ShopPanel() {
           </div>
         )
       })}
-    </Window>
+    </>
   )
 }

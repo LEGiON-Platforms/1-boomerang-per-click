@@ -11,8 +11,20 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    // The three/R3F vendor chunk is ~800 kB minified; everything else is split.
-    chunkSizeWarningLimit: 900,
+    chunkSizeWarningLimit: 800,
     reportCompressedSize: true,
+    rolldownOptions: {
+      output: {
+        // Long-lived vendor chunks: a game update doesn't re-download three.js.
+        codeSplitting: {
+          groups: [
+            { name: 'three', test: /node_modules[\\/]three[\\/]/, priority: 30 },
+            { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 20 },
+            { name: 'r3f', test: /node_modules[\\/](@react-three|three-stdlib|zustand|its-fine|suspend-react|use-sync-external-store|@monogrid|maath|three-mesh-bvh)/, priority: 10 },
+            { name: 'net', test: /node_modules[\\/](@colyseus|msgpackr)/, priority: 10 },
+          ],
+        },
+      },
+    },
   },
 })

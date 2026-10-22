@@ -34,8 +34,67 @@ export const TRAINING_PAD_SPOTS: readonly { pad: Vec2; dummy: Vec2 }[] = [8, 15,
 )
 export const TRAINING_PAD_RADIUS = 2.2
 
-/** Boomerang display pedestals (a sliding window over the boomerang list). */
-export const PEDESTAL_SPOTS: readonly Vec2[] = [10, 17, 24, 31, 38, 45].map((z) => ({ x: 30, z }))
+/**
+ * Boomerang Stage (east side): a low two-tier platform showing the boomerangs in
+ * order — Boomerangs 1–10 along the front tier, 11–20 along the higher back tier
+ * (staggered, so both rows read from the lobby). Each stands over a buy pad; the
+ * VIP boomerang has a podium at the north end. Walkable: see groundHeight.
+ */
+export const BOOMERANG_STAGE = {
+  minX: 31,
+  maxX: LOBBY.maxX,
+  minZ: 2,
+  maxZ: 58,
+  /** The back tier starts at this x. */
+  backX: 37.5,
+  frontHeight: 0.6,
+  backHeight: 1.2,
+  perRow: 10,
+  /** z of the first front-row pad, and the gap between pads in a row. */
+  firstZ: 12,
+  spacing: 4.6,
+  padRadius: 1.2,
+} as const
+
+/** The tallest ledge the player walks up without jumping. */
+export const STEP_UP = 0.8
+
+export interface Vec3 extends Vec2 {
+  y: number
+}
+
+/** Centre of each display pad, on its tier: the front row, then the (staggered) back row. */
+export const BOOMERANG_SPOTS: readonly Vec3[] = Array.from({ length: BOOMERANG_STAGE.perRow * 2 }, (_, i) => {
+  const s = BOOMERANG_STAGE
+  const back = i >= s.perRow
+  const k = i % s.perRow
+  return back
+    ? { x: (s.backX + s.maxX) / 2, y: s.backHeight, z: s.firstZ + (k + 0.5) * s.spacing }
+    : { x: (s.minX + s.backX) / 2, y: s.frontHeight, z: s.firstZ + k * s.spacing }
+})
+
+/** The VIP boomerang's podium, at the north end of the stage. */
+export const VIP_DISPLAY: Vec3 = {
+  x: BOOMERANG_STAGE.backX,
+  y: BOOMERANG_STAGE.backHeight,
+  z: (BOOMERANG_STAGE.minZ + BOOMERANG_STAGE.firstZ - BOOMERANG_STAGE.padRadius) / 2,
+}
+
+/** Floor height at (x, z): the stage's tiers, 0 everywhere else. */
+export function groundHeight(x: number, z: number): number {
+  const s = BOOMERANG_STAGE
+  if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) return 0
+  return x < s.backX ? s.frontHeight : s.backHeight
+}
+
+/** Index of the display pad under (x, z), or -1. */
+export function boomerangPadAt(p: Vec2): number {
+  for (let i = 0; i < BOOMERANG_SPOTS.length; i += 1) {
+    const s = BOOMERANG_SPOTS[i]
+    if (Math.hypot(p.x - s.x, p.z - s.z) < BOOMERANG_STAGE.padRadius) return i
+  }
+  return -1
+}
 
 /** Eggs, in EGGS order (yellow, blue, red, purple, black, event). */
 export const EGG_SPOTS: readonly Vec2[] = [
@@ -49,7 +108,6 @@ export const EGG_SPOTS: readonly Vec2[] = [
 
 export const TRAILS_STALL: Vec2 = { x: -15, z: 9 }
 export const REBIRTH_STATUE: Vec2 = { x: 16, z: 40 }
-export const STAGES_PORTAL: Vec2 = { x: 15, z: 9 }
 export const LEADERBOARD_SPOTS: readonly Vec2[] = [
   { x: -18, z: 69 },
   { x: 0, z: 69 },
@@ -79,14 +137,10 @@ const box = (c: Vec2, hx: number, hz: number): Box => ({
 
 /** Raised deck the training dummies stand on (west side). */
 export const TRAINING_DECK: Box = { minX: LOBBY.minX, maxX: -35, minZ: 3, maxZ: 55 }
-/** Stepped display behind the boomerang pedestals (east side). */
-export const BOOMERANG_STEPS: Box = { minX: 34, maxX: LOBBY.maxX, minZ: 5, maxZ: 50 }
 
-/** Solid lobby props the player collides with. */
+/** Solid lobby props the player collides with. (The Boomerang Stage is walkable: see groundHeight.) */
 export const LOBBY_OBSTACLES: readonly Box[] = [
   TRAINING_DECK,
-  BOOMERANG_STEPS,
-  ...PEDESTAL_SPOTS.map((p) => box(p, 1.1, 1.1)),
   ...EGG_SPOTS.map((e) => box(e, 1.5, 1.5)),
   box(TRAILS_STALL, 3.2, 1.6),
   box(REBIRTH_STATUE, 1.8, 1.8),
@@ -105,10 +159,22 @@ export const CORRIDOR = {
 export const STAGE_LENGTH = 80
 export const WALL_SPACING = 6
 export const FIRST_WALL_OFFSET = 10
-export const PAD_OFFSET = 74
 export const WALL_THICKNESS = 1.2
 export const WALL_HEIGHT = 10
-export const PAD_SIZE = { w: 9, d: 5 } as const
+
+/**
+ * Past its last wall each stage opens into a wider reward room that runs to the
+ * end gate; the win pad sits against the room's left wall (facing down the
+ * corridor, left is -x).
+ */
+export const REWARD_ROOM = {
+  /** Distance from the stage entrance to where the room opens (just past wall 10). */
+  startOffset: 67,
+  halfWidth: 13,
+} as const
+export const PAD_OFFSET = 75
+export const PAD_SIZE = { w: 6, d: 6 } as const
+export const PAD_X = -(REWARD_ROOM.halfWidth - PAD_SIZE.w / 2 - 0.5)
 
 /** z of the entrance line of a stage (where its run starts). */
 export function stageStartZ(stage: number): number {
@@ -134,6 +200,17 @@ export function stageSpawn(stage: number): { x: number; z: number; rotY: number 
   return { x: 0, z: stageStartZ(stage) - 2, rotY: Math.PI }
 }
 
+/** How far past its stage's entrance `z` lies (0..STAGE_LENGTH); negative in the lobby. */
+function depthIntoStage(z: number): number {
+  const d = stageStartZ(1) - z
+  return d < 0 ? d : d % STAGE_LENGTH
+}
+
+/** Whether `z` lies inside some stage's reward room. */
+export function inRewardRoom(z: number): boolean {
+  return depthIntoStage(z) >= REWARD_ROOM.startOffset
+}
+
 /** Which stage area `z` lies in; 0 for the lobby. */
 export function stageAtZ(z: number): number {
   if (z > stageStartZ(1)) return 0
@@ -148,7 +225,7 @@ export const LUCKY_SPOTS: readonly Vec2[] = [
   { x: -20, z: 34 },
   { x: 22, z: 20 },
   { x: -34, z: 56 },
-  { x: 36, z: 54 },
+  { x: 27, z: 54 },
   { x: 0, z: 12 },
   { x: -6, z: 46 },
   ...[1, 2, 3, 4, 5].map((s) => ({ x: s % 2 === 0 ? 4 : -4, z: stageStartZ(s) - 5 })),
@@ -161,11 +238,11 @@ export const PUMPKIN_SPOTS: readonly Vec2[] = [
   { x: -20, z: 26 },
   { x: 22, z: 30 },
   { x: -34, z: 4 },
-  { x: 36, z: 6 },
+  { x: 27, z: 6 },
   { x: -10, z: 48 },
   { x: 8, z: 46 },
   { x: -30, z: 60 },
-  { x: 34, z: 62 },
+  { x: 28, z: 62 },
   { x: 0, z: 40 },
   { x: -26, z: 40 },
   ...Array.from({ length: STAGE_COUNT }, (_, i) => ({ x: (i % 3) * 5 - 5, z: stageStartZ(i + 1) - 6 })),
@@ -214,8 +291,22 @@ export function constrainPosition(x: number, z: number, run: RunBarrier): Vec2 {
   const ax = clamp(x, WALKABLE_LOBBY.minX, WALKABLE_LOBBY.maxX)
   const az = clamp(z, WALKABLE_LOBBY.minZ, WALKABLE_LOBBY.maxZ)
   // The corridor overlaps the lobby by a little so the two regions connect.
-  const bx = clamp(x, -CORRIDOR.halfWidth + r, CORRIDOR.halfWidth - r)
-  const bz = clamp(z, barrierMinZ(run), LOBBY.minZ + r + 1)
+  let bz = clamp(z, barrierMinZ(run), LOBBY.minZ + r + 1)
+  const narrow = CORRIDOR.halfWidth - r
+  if (Math.abs(x) > narrow && !inRewardRoom(bz)) {
+    // Beside the narrow corridor is only open inside a reward room: step back to
+    // the room's edge if that's the shorter way out, else slide along the corridor wall.
+    const depth = depthIntoStage(bz)
+    const toRoomStart = REWARD_ROOM.startOffset - depth + r
+    const toRoomEnd = stageAtZ(bz) > 1 ? depth + r : Infinity
+    const dx = Math.abs(x) - narrow
+    if (Math.min(toRoomStart, toRoomEnd) < dx) {
+      bz = toRoomStart <= toRoomEnd ? bz - toRoomStart : bz + toRoomEnd
+      bz = Math.max(bz, barrierMinZ(run))
+    }
+  }
+  const halfWidth = inRewardRoom(bz) ? REWARD_ROOM.halfWidth - r : narrow
+  const bx = clamp(x, -halfWidth, halfWidth)
 
   const da = (ax - x) ** 2 + (az - z) ** 2
   const db = (bx - x) ** 2 + (bz - z) ** 2
@@ -262,7 +353,7 @@ export function padAtPosition(p: Vec2): number {
 /** True when standing on the Win Pad of `stage`. */
 export function onWinPad(p: Vec2, stage: number): boolean {
   return (
-    Math.abs(p.x) <= PAD_SIZE.w / 2 + PLAYER_RADIUS &&
+    Math.abs(p.x - PAD_X) <= PAD_SIZE.w / 2 + PLAYER_RADIUS &&
     Math.abs(p.z - padZ(stage)) <= PAD_SIZE.d / 2 + PLAYER_RADIUS
   )
 }

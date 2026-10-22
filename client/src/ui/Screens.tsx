@@ -1,9 +1,10 @@
 import { useProgress } from '@react-three/drei'
-import { sanitizeName } from '@game/shared'
+import { bestBoomerangId, sanitizeName } from '@game/shared'
 import { useEffect, useRef, useState } from 'react'
 
 import { unlockAudio } from '../audio/sfx'
 import { useBloxitySession as useBloxity } from '../bloxity/session'
+import { boomerangLook } from '../game/boomerangShapes'
 import { input } from '../game/runtime'
 import { requestThrow } from '../game/throwing'
 import { connect } from '../net/connection'
@@ -139,6 +140,13 @@ export function ConnectionOverlay() {
 const STICK_RADIUS = 62
 
 /** Touch controls: a virtual stick and a big THROW button (touch devices only). */
+/** The boomerang the player throws (re-renders only when it changes). */
+function EquippedBoomerang({ size }: { size: number }) {
+  const id = useGame((s) => (s.data ? bestBoomerangId(s.data) : 0))
+  const vip = useGame((s) => s.data?.vipBoomerang ?? false)
+  return <BoomerangIcon size={size} look={boomerangLook(id, vip)} />
+}
+
 export function MobileControls() {
   const [touch] = useState(isTouchDevice)
   const knobRef = useRef<HTMLDivElement>(null)
@@ -194,14 +202,16 @@ export function MobileControls() {
         onPointerDown={(e) => {
           unlockAudio()
           e.currentTarget.setPointerCapture(e.pointerId)
-          requestThrow()
+          const r = e.currentTarget.getBoundingClientRect()
+          const from = { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+          requestThrow(from)
           stopRepeat()
-          repeat.current = window.setInterval(requestThrow, 95)
+          repeat.current = window.setInterval(() => requestThrow(from), 95)
         }}
         onPointerUp={stopRepeat}
         onPointerCancel={stopRepeat}
       >
-        <BoomerangIcon size={70} />
+        <EquippedBoomerang size={70} />
       </button>
     </>
   )

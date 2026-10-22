@@ -1,5 +1,7 @@
-import { useGLTF } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useLoader } from '@react-three/fiber'
+// three's own loader (also used by avatarLoader.js): drei's useGLTF would pull
+// three-stdlib's duplicate GLTF/Draco/Meshopt loaders into the bundle.
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
 import { Box3, MeshStandardMaterial, Vector3 } from 'three'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
@@ -57,7 +59,7 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
   ref,
 ) {
   const { avatar: equipped, proportions, game } = useBloxity()
-  const { scene: baseScene } = useGLTF(BASE_BODY_URL)
+  const { scene: baseScene } = useLoader(GLTFLoader, BASE_BODY_URL)
   const [assembled, setAssembled] = useState(false)
 
   // The GLTF cache hands back one shared scene. Clone via SkeletonUtils so this
@@ -229,6 +231,6 @@ export const PlayerAvatar = forwardRef(function PlayerAvatar(
   )
 })
 
-useGLTF.preload(BASE_BODY_URL)
+useLoader.preload(GLTFLoader, BASE_BODY_URL)
 
 export default PlayerAvatar

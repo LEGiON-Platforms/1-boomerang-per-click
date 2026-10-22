@@ -3,7 +3,9 @@
  * The rebirth icon is the provided artwork (public/icons/rebirth.webp).
  */
 
-import type { CSSProperties } from 'react'
+import { type CSSProperties, useId } from 'react'
+
+import { type BoomerangLook, boomerangLook, svgShape } from '../game/boomerangShapes'
 
 const STROKE = '#1b1b22'
 
@@ -180,17 +182,89 @@ export function LockIcon({ size, className, style }: IconProps) {
   )
 }
 
-export function BoomerangIcon({ size, className, style, color = '#c98a4b' }: IconProps & { color?: string }) {
+const RAINBOW = ['#ff4d4d', '#ffb31a', '#ffe94a', '#4dff7a', '#36d9ff', '#5b6bff', '#d24dff']
+
+const hexagon = (x: number, y: number, r: number) =>
+  Array.from({ length: 6 }, (_, k) => {
+    const a = Math.PI / 6 + (k * Math.PI) / 3
+    return `${(x + Math.cos(a) * r).toFixed(3)},${(y + Math.sin(a) * r).toFixed(3)}`
+  }).join(' ')
+
+/**
+ * A boomerang drawn from the same outline as its 3D model, with its pattern,
+ * shading, accent rim and gem. Glowing tiers get a gradient halo (no CSS filter:
+ * the shop lists sixty of these).
+ */
+export function BoomerangIcon({ size, className, style, look = boomerangLook(13) }: IconProps & { look?: BoomerangLook }) {
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '')
+  const svg = svgShape(look.shape)
+  const ref = (k: string) => `url(#${uid}${k})`
+  const p = look.pattern
   return (
-    <svg viewBox="0 0 64 64" style={{ ...box(size), ...style }} className={className}>
-      <path
-        d="M5 41 L29 13 Q32 10 35 13 L59 41 Q62 47 55 50 Q51 51 48 48 L32 31 L16 48 Q13 51 9 50 Q2 47 5 41 Z"
-        fill={color}
-        stroke={STROKE}
-        strokeWidth="4"
-        strokeLinejoin="round"
-      />
-      <path d="M12 41 L31 19 M52 41 L33 19" stroke="rgba(255,255,255,0.45)" strokeWidth="3" strokeLinecap="round" />
+    <svg viewBox={svg.viewBox} style={{ ...box(size), ...style }} className={className}>
+      <defs>
+        <clipPath id={`${uid}c`}>
+          <path d={svg.path} />
+        </clipPath>
+        <linearGradient id={`${uid}s`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.55" />
+          <stop offset="0.45" stopColor="#fff" stopOpacity="0" />
+          <stop offset="1" stopColor="#000" stopOpacity="0.28" />
+        </linearGradient>
+        {look.glow >= 0.3 && (
+          <radialGradient id={`${uid}h`}>
+            <stop offset="0.25" stopColor={look.color} stopOpacity={Math.min(0.75, look.glow * 0.7)} />
+            <stop offset="1" stopColor={look.color} stopOpacity="0" />
+          </radialGradient>
+        )}
+        {p === 'stripes' && (
+          <pattern id={`${uid}p`} width="0.353" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(32)">
+            <rect width="0.141" height="4" fill={look.accent} />
+          </pattern>
+        )}
+        {p === 'grain' && (
+          <pattern id={`${uid}p`} width="0.185" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(8)">
+            <rect width="0.045" height="4" fill="#000" fillOpacity="0.16" />
+          </pattern>
+        )}
+        {p === 'rainbow' && (
+          <linearGradient id={`${uid}r`} x1="0" y1="0" x2="1" y2="1">
+            {RAINBOW.map((c, i) => (
+              <stop key={c} offset={i / (RAINBOW.length - 1)} stopColor={c} />
+            ))}
+          </linearGradient>
+        )}
+      </defs>
+      {look.glow >= 0.3 && <circle cx={svg.centerX} cy={svg.centerY} r="1.05" fill={ref('h')} />}
+      <path d={svg.path} fill={p === 'rainbow' ? ref('r') : look.color} />
+      <g clipPath={ref('c')}>
+        {p === 'tips' && svg.tips.map(([x, y, r], i) => <circle key={i} cx={x} cy={y} r={r} fill={look.accent} />)}
+        {p === 'bands' &&
+          svg.tips.map(([x, y, r], i) => (
+            <g key={i} fill="none" stroke={look.accent} strokeWidth="0.07">
+              <circle cx={x} cy={y} r={r - 0.02} />
+              <circle cx={x} cy={y} r={r + 0.11} />
+            </g>
+          ))}
+        {(p === 'stripes' || p === 'grain') && <rect x="-2" y="-2" width="4" height="4" fill={ref('p')} />}
+        {p === 'core' && <circle cx={svg.core[0]} cy={svg.core[1]} r={svg.core[2]} fill={look.accent} />}
+        {p === 'split' && <rect x={svg.centerX} y="-2" width="4" height="4" fill={look.accent} />}
+        {/* Accent rim: only the inner half of this stroke survives the clip. */}
+        <path d={svg.path} fill={ref('s')} stroke={look.accent} strokeWidth="0.1" strokeOpacity="0.8" />
+      </g>
+      <path d={svg.path} fill="none" stroke={STROKE} strokeWidth="0.075" strokeLinejoin="round" />
+      {look.gem && (
+        <g stroke={STROKE} strokeWidth="0.03" strokeLinejoin="round">
+          <polygon points={hexagon(svg.gem[0], svg.gem[1], svg.gem[2])} fill={look.accent} />
+          <polygon points={hexagon(svg.gem[0], svg.gem[1], svg.gem[2])} fill="#fff" fillOpacity="0.35" stroke="none" />
+          <polygon
+            points={hexagon(svg.gem[0] - svg.gem[2] * 0.3, svg.gem[1] - svg.gem[2] * 0.3, svg.gem[2] * 0.35)}
+            fill="#fff"
+            fillOpacity="0.8"
+            stroke="none"
+          />
+        </g>
+      )}
     </svg>
   )
 }

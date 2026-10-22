@@ -43,7 +43,7 @@ export function FollowCamera() {
       unlockAudio()
       el.setPointerCapture?.(e.pointerId)
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, t: performance.now(), moved: false })
-      if (e.pointerType === 'mouse' && e.button === 0) requestThrow()
+      if (e.pointerType === 'mouse' && e.button === 0) requestThrow({ x: e.clientX, y: e.clientY })
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()]
         pinchDist = Math.hypot(a.x - b.x, a.y - b.y)
@@ -77,7 +77,7 @@ export function FollowCamera() {
       pointers.delete(e.pointerId)
       el.releasePointerCapture?.(e.pointerId)
       if (p && e.pointerType !== 'mouse' && !p.moved && performance.now() - p.t < TAP_MAX_MS && pointers.size === 0) {
-        requestThrow()
+        requestThrow({ x: p.x, y: p.y })
       }
     }
 

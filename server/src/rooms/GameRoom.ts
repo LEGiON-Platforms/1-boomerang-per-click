@@ -43,6 +43,7 @@ import {
   LUCKY_PHASE,
   LUCKY_SPOTS,
   MAX_CLIENTS,
+  levelSpeedMult,
   MAX_SPEED,
   mergePets,
   type MoveMsg,
@@ -71,7 +72,6 @@ import {
   SPAWN,
   STAGE_COUNT,
   stageAtZ,
-  type StageChoiceMsg,
   stageSpawn,
   TARGET,
   THROW,
@@ -96,8 +96,8 @@ export const CLOSE_DUPLICATE = 4100
 const RANGE_TOLERANCE = 3
 /** Corrections are only sent when the client is off by more than this. */
 const CORRECTION_DISTANCE = 1.0
-/** "Farm Again" wall respawn delay. */
-const FARM_RESPAWN_MS = 2000
+/** Celebration time on the win pad before the player respawns in the lobby. */
+const PAD_RESPAWN_MS = 1800
 
 const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max)
 const finite = (...v: unknown[]) => v.every((n) => typeof n === 'number' && Number.isFinite(n))
@@ -183,7 +183,7 @@ export class GameRoom extends Room<{ state: GameState }> {
   async onLeave(client: Client): Promise<void> {
     const s = this.sessions.get(client.sessionId)
     if (!s) return
-    s.farmTimer?.clear()
+    s.respawnTimer?.clear()
     this.sessions.delete(client.sessionId)
     this.state.players.delete(client.sessionId)
     s.data.lastSeen = Date.now()
@@ -347,31 +347,22 @@ export class GameRoom extends Room<{ state: GameState }> {
       s.client.send(S2C.padClaimed, { stage: s.run.stage, wins: r.wins, unlocked: r.unlocked })
       this.sendRun(s)
       this.changed(s)
-    })
-
-    this.on<StageChoiceMsg>(C2S.stageChoice, (s, m) => {
-      if (!s.run.padClaimed || s.farmTimer) return
-      const stage = s.run.stage
-      if (m?.choice === 'next') {
-        if (stage >= STAGE_COUNT || !isStageUnlocked(s.data, stage + 1)) return this.error(s, 'stage_locked')
-        s.run = createRun(stage + 1)
+      // After a short celebration: back to the lobby, lined up for the next stage.
+      s.respawnTimer?.clear()
+      s.respawnTimer = this.clock.setTimeout(() => {
+        s.respawnTimer = null
+        const stage = s.run.stage
+        s.run = createRun(stage < STAGE_COUNT && isStageUnlocked(s.data, stage + 1) ? stage + 1 : stage)
+        this.teleport(s, SPAWN.x, SPAWN.z, SPAWN.rotY)
         this.sendRun(s)
-      } else {
-        s.farmTimer = this.clock.setTimeout(() => {
-          s.farmTimer = null
-          s.run = createRun(stage)
-          const spawn = stageSpawn(stage)
-          this.teleport(s, spawn.x, spawn.z, spawn.rotY)
-          this.sendRun(s)
-        }, FARM_RESPAWN_MS)
-      }
+      }, PAD_RESPAWN_MS)
     })
 
     this.on<{ stage: number }>(C2S.teleportStage, (s, m) => {
       const stage = Math.floor(Number(m?.stage))
       if (!finite(stage)) return this.error(s, 'bad_request')
-      s.farmTimer?.clear()
-      s.farmTimer = null
+      s.respawnTimer?.clear()
+      s.respawnTimer = null
       if (stage === 0) {
         if (s.run.padClaimed) s.run = createRun(s.run.stage)
         this.teleport(s, SPAWN.x, SPAWN.z, SPAWN.rotY)
@@ -417,8 +408,8 @@ export class GameRoom extends Room<{ state: GameState }> {
     this.on(C2S.rebirth, (s) => {
       const r = rebirth(s.data)
       if (!r.ok) return this.error(s, r.error)
-      s.farmTimer?.clear()
-      s.farmTimer = null
+      s.respawnTimer?.clear()
+      s.respawnTimer = null
       s.run = createRun(1)
       this.teleport(s, SPAWN.x, SPAWN.z, SPAWN.rotY)
       this.sendRun(s)
@@ -558,7 +549,7 @@ export class GameRoom extends Room<{ state: GameState }> {
     const dt = clamp((now - s.lastMoveAt) / 1000, 0.05, 1.5)
     s.lastMoveAt = now
     const c = constrainPosition(m.x, m.z, s.run)
-    const maxStep = MAX_SPEED * dt * 1.6 + 1.5
+    const maxStep = MAX_SPEED * levelSpeedMult(s.level) * dt * 1.6 + 1.5
     if (Math.hypot(c.x - s.pos.x, c.z - s.pos.z) > maxStep) {
       // Faster than anyone can run: rubber-band back to the last good position.
       this.teleport(s, s.pos.x, s.pos.z, s.pos.rotY)

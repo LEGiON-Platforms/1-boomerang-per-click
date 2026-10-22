@@ -13,6 +13,8 @@ import { Client, type Room } from '@colyseus/sdk'
 import {
   C2S,
   MAX_CLIENTS,
+  PAD_X,
+  SPAWN,
   padZ,
   ROOM_NAME,
   S2C,
@@ -120,19 +122,22 @@ async function main(): Promise<void> {
   console.log(`Bot test against ${URL}\n`)
 
   // --- Rooms: 8 per room, the 9th player gets a new room ------------------
+  // A dev server may already hold real players, so the bots can start in a part-full
+  // room: it must fill to exactly 8 before anyone is placed elsewhere.
   const bots: Bot[] = []
   for (let i = 0; i < MAX_CLIENTS + 1; i += 1) bots.push(await connect(`Bot${i}`))
-  const firstRoom = bots[0].room.roomId
-  check(
-    bots.slice(0, MAX_CLIENTS).every((b) => b.room.roomId === firstRoom),
-    `first ${MAX_CLIENTS} players share one room`,
-  )
-  check(bots[MAX_CLIENTS].room.roomId !== firstRoom, '9th player is placed in a new room')
   await sleep(300)
+  const firstRoom = bots[0].room.roomId
+  const playersIn = (b: Bot) => (b.room.state as { players: Map<string, unknown> }).players.size
+  const inFirst = bots.filter((b) => b.room.roomId === firstRoom)
+  const spill = bots.findIndex((b) => b.room.roomId !== firstRoom)
   check(
-    (bots[0].room.state as { players: Map<string, unknown> }).players.size === MAX_CLIENTS,
-    'room state lists all 8 players',
+    spill > 0 && bots.slice(0, spill).every((b) => b.room.roomId === firstRoom),
+    `players fill one room before a second opens`,
+    `${inFirst.length} bots + ${playersIn(bots[0]) - inFirst.length} others`,
   )
+  check(spill > 0 && bots.slice(spill).every((b) => b.room.roomId !== firstRoom), 'overflow players are placed in a new room')
+  check(playersIn(bots[0]) === MAX_CLIENTS, 'room state lists all 8 players')
 
   // --- Training pad throws: server applies the pad multiplier --------------
   const a = bots[0]
@@ -200,7 +205,7 @@ async function main(): Promise<void> {
   check(a.run.wallsBroken === 10, 'all 10 walls of stage 1 broken by server-side damage', `${guard} throws`)
   check(a.results.some((r) => r.hit?.broken), 'throwResult reports wall breaks')
 
-  await walkTo(a, 0, padZ(1))
+  await walkTo(a, PAD_X, padZ(1))
   await sleep(200)
   a.room.send(C2S.claimPad)
   await sleep(300)
@@ -212,9 +217,12 @@ async function main(): Promise<void> {
   await sleep(200)
   check(a.errors.includes('already_claimed'), 'claiming the same pad twice is refused')
 
-  a.room.send(C2S.stageChoice, { choice: 'next' })
-  await sleep(200)
-  check(a.run.stage === 2 && a.run.wallsBroken === 0, '"Next Stage" starts a fresh stage 2 run')
+  await sleep(1900)
+  check(
+    a.run.stage === 2 && a.run.wallsBroken === 0 && Math.abs(a.z - SPAWN.z) < 0.5,
+    'after the pad the player respawns in the lobby, lined up for stage 2',
+    `stage ${a.run.stage}, z=${a.z.toFixed(1)}`,
+  )
 
   a.room.send(C2S.teleportStage, { stage: 5 })
   await sleep(200)
@@ -241,7 +249,7 @@ async function main(): Promise<void> {
 
   a.room.send(C2S.rebirth)
   await sleep(200)
-  check(a.errors.includes('not_enough_wins'), 'rebirth without enough wins is refused')
+  check(a.errors.includes('level_too_low'), 'rebirth below the required level is refused')
 
   // --- Persistence: leave and come back ------------------------------------
   const savedPower = a.data.power

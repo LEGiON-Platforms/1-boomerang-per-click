@@ -9,7 +9,8 @@
 import { BOOMERANGS } from '../config/boomerangs'
 import {
   padWins,
-  rebirthCost,
+  levelForXp,
+  rebirthLevel,
   STAGE_COUNT,
   wallBreakWins,
   wallHp,
@@ -182,8 +183,7 @@ export function equipTrail(d: PlayerData, id: number): Result {
 }
 
 export function rebirth(d: PlayerData): Result<{ rebirths: number }> {
-  const cost = rebirthCost(d.rebirths)
-  if (d.wins < cost) return fail('not_enough_wins')
+  if (levelForXp(d.stats.powerEarned) < rebirthLevel(d.rebirths)) return fail('level_too_low')
   d.rebirths += 1
   d.stats.rebirths += 1
   // Resets: Power, Wins, stage progress. Everything else is kept.

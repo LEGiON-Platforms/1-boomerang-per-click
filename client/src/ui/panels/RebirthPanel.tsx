@@ -1,9 +1,10 @@
 import {
   C2S,
-  formatNumber,
+  levelForXp,
   PETS_CONFIG,
-  rebirthCost,
+  rebirthLevel,
   rebirthMultiplier,
+  rebirthProgressForXp,
   THROW,
   TRAINING_PADS,
 } from '@game/shared'
@@ -12,7 +13,7 @@ import { playSfx } from '../../audio/sfx'
 import { send } from '../../net/connection'
 import { useGame } from '../../state/gameStore'
 import { ui } from '../../state/uiStore'
-import { RebirthIcon, TrophyIcon } from '../icons'
+import { RebirthIcon } from '../icons'
 import { Window } from '../Window'
 
 /** What reaching `next` rebirths newly unlocks. */
@@ -29,11 +30,12 @@ function unlocksAt(next: number): string[] {
 
 export function RebirthPanel() {
   const data = useGame((s) => s.data)
-  const wins = useGame((s) => s.wins)
+  const xp = useGame((s) => s.xp)
   if (!data) return null
   const r = data.rebirths
-  const cost = rebirthCost(r)
-  const can = wins >= cost
+  const need = rebirthLevel(r)
+  const level = levelForXp(xp)
+  const can = level >= need
   const unlocks = unlocksAt(r + 1)
 
   return (
@@ -57,11 +59,12 @@ export function RebirthPanel() {
         <div className="txt-outline text-[26px]">Power multiplier · Rebirth {r} → {r + 1}</div>
 
         <div className="progress" style={{ width: 520, height: 40 }}>
-          <div className="fill" style={{ width: `${Math.min(1, wins / cost) * 100}%`, background: 'linear-gradient(180deg,#ff8ad8,#b04dff)' }} />
+          <div
+            className="fill"
+            style={{ width: `${rebirthProgressForXp(xp, r) * 100}%`, background: 'linear-gradient(180deg,#ff8ad8,#b04dff)' }}
+          />
           <div className="text txt-outline" style={{ fontSize: 24 }}>
-            <span className="inline-flex items-center gap-2">
-              <TrophyIcon size={24} /> {formatNumber(wins)} / {formatNumber(cost)}
-            </span>
+            Level {Math.min(level, need)} / {need}
           </div>
         </div>
 
@@ -100,7 +103,7 @@ export function RebirthPanel() {
           }}
         >
           <RebirthIcon size={48} />
-          <span className="txt-outline text-[40px]">{can ? 'REBIRTH' : `Need ${formatNumber(cost - wins)} more`}</span>
+          <span className="txt-outline text-[40px]">{can ? 'REBIRTH' : `Reach Level ${need}`}</span>
         </button>
       </div>
     </Window>

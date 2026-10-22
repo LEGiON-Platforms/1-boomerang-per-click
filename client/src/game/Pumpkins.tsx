@@ -23,21 +23,37 @@ export function Pumpkins() {
     },
     [geometry, material],
   )
+  useEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    for (let i = 0; i < PUMPKIN_SPOTS.length; i += 1) mesh.setMatrixAt(i, HIDDEN)
+    mesh.instanceMatrix.needsUpdate = true
+  }, [])
+
+  // Visibility (distance + respawn state) is re-checked 4x a second, not per frame.
+  const visible = useMemo(() => new Uint8Array(PUMPKIN_SPOTS.length), [])
+  const checkedAt = useRef(-1)
 
   useFrame(() => {
     const mesh = ref.current
     if (!mesh) return
     const t = now()
     const ms = performance.now()
-    const p = localPlayer.pos
-    for (let i = 0; i < PUMPKIN_SPOTS.length; i += 1) {
-      const s = PUMPKIN_SPOTS[i]
-      const dx = s.x - p.x
-      const dz = s.z - p.z
-      if (dx * dx + dz * dz > VIEW_DISTANCE * VIEW_DISTANCE || !pumpkinVisible(i, ms)) {
-        mesh.setMatrixAt(i, HIDDEN)
-        continue
+    if (ms - checkedAt.current > 250) {
+      checkedAt.current = ms
+      const p = localPlayer.pos
+      for (let i = 0; i < PUMPKIN_SPOTS.length; i += 1) {
+        const s = PUMPKIN_SPOTS[i]
+        const dx = s.x - p.x
+        const dz = s.z - p.z
+        const show = dx * dx + dz * dz <= VIEW_DISTANCE * VIEW_DISTANCE && pumpkinVisible(i, ms)
+        if (!show && visible[i]) mesh.setMatrixAt(i, HIDDEN)
+        visible[i] = show ? 1 : 0
       }
+    }
+    for (let i = 0; i < PUMPKIN_SPOTS.length; i += 1) {
+      if (!visible[i]) continue
+      const s = PUMPKIN_SPOTS[i]
       _o.position.set(s.x, 0.25 + Math.abs(Math.sin(t * 2.5 + i)) * 0.35, s.z)
       _o.rotation.set(0, t * 0.8 + i, 0)
       _o.updateMatrix()

@@ -17,9 +17,9 @@ export const WALL_HP = {
    * `lateGrowth` with a decay of `taper` stages. A single constant can't hit both
    * the early and late time targets — see README "Balance". Tuned by tools/tune.ts.
    */
-  earlyGrowth: 14,
-  lateGrowth: 1.8,
-  taper: 3.2,
+  earlyGrowth: 20.57,
+  lateGrowth: 1.6,
+  taper: 3.22,
   /** Each later wall in a stage has +15% of the stage's base HP. */
   perWall: 0.15,
 }
@@ -35,9 +35,8 @@ export const PAD_WINS: readonly number[] = [
 export const WALL_BREAK_WIN_FRACTION = 0.05
 
 export const REBIRTH = {
-  /** Wins needed for the first rebirth. Tuned by tools/tune.ts. */
-  costBase: 550,
-  costGrowth: 2.6,
+  /** Rebirth n needs player level n × levelStep: 15, 30, 45, … (no Wins cost). */
+  levelStep: 15,
 }
 
 export const THROW = {
@@ -91,8 +90,9 @@ export function wallBreakWins(stage: number): number {
   return Math.floor(padWins(stage) * WALL_BREAK_WIN_FRACTION)
 }
 
-export function rebirthCost(rebirths: number): number {
-  return Math.round(REBIRTH.costBase * Math.pow(REBIRTH.costGrowth, rebirths))
+/** Player level needed for the next rebirth, after `rebirths` so far. */
+export function rebirthLevel(rebirths: number): number {
+  return (rebirths + 1) * REBIRTH.levelStep
 }
 
 export function rebirthMultiplier(rebirths: number): number {
@@ -128,20 +128,59 @@ export function clickGain(f: ClickGainFactors): number {
  * ------------------------------------------------------------------------- */
 
 export const LEVEL = {
-  /** XP to reach level 2. */
-  base: 25,
-  growth: 1.9,
-} as const
+  /** XP to reach level 2. Tuned by tools/tune.ts (rebirths are level-gated). */
+  base: 19,
+  /**
+   * XP growth per level tapers from `earlyGrowth` towards `lateGrowth` over
+   * `taper` levels: early levels pace the first rebirth (level 15), the gentler
+   * tail keeps later rebirths (level 30, 45, …) reachable. Tuned by tools/tune.ts.
+   */
+  earlyGrowth: 2.211,
+  lateGrowth: 1.049,
+  taper: 18.2,
+}
+
+/** Walking gets faster with level: +1% per level above 1, capped. */
+export const LEVEL_SPEED = { perLevel: 0.01, max: 0.6 }
+
+export function levelSpeedMult(level: number): number {
+  return 1 + Math.min(LEVEL_SPEED.max, Math.max(0, level - 1) * LEVEL_SPEED.perLevel)
+}
+
+const LEVEL_CAP = 2000
+let xpTable: number[] = []
+let xpTableKey = ''
+
+/** Cumulative XP per level (index = level), rebuilt when the tuner changes LEVEL. */
+function levelTable(): number[] {
+  const key = `${LEVEL.base}|${LEVEL.earlyGrowth}|${LEVEL.lateGrowth}|${LEVEL.taper}`
+  if (key !== xpTableKey) {
+    xpTableKey = key
+    xpTable = [0, 0, LEVEL.base]
+    for (let level = 3; level <= LEVEL_CAP; level += 1) {
+      const g = LEVEL.lateGrowth + (LEVEL.earlyGrowth - LEVEL.lateGrowth) * Math.exp(-(level - 3) / LEVEL.taper)
+      xpTable.push(xpTable[level - 1] * g)
+    }
+  }
+  return xpTable
+}
 
 /** Total XP required to *be* at `level` (level 1 needs 0). */
 export function xpForLevel(level: number): number {
   if (level <= 1) return 0
-  return Math.round(LEVEL.base * Math.pow(LEVEL.growth, level - 2))
+  return Math.round(levelTable()[Math.min(level, LEVEL_CAP)])
 }
 
 export function levelForXp(xp: number): number {
-  if (xp < LEVEL.base) return 1
-  return Math.floor(Math.log(xp / LEVEL.base) / Math.log(LEVEL.growth)) + 2
+  const t = levelTable()
+  let lo = 1
+  let hi = LEVEL_CAP
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (t[mid] <= xp) lo = mid
+    else hi = mid - 1
+  }
+  return lo
 }
 
 /** 0..1 progress from the current level to the next. */

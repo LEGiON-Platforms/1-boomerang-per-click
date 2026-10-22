@@ -1,4 +1,5 @@
 import {
+  BOOMERANG_SPOTS,
   BOOMERANGS,
   EGG_SPOTS,
   EGGS,
@@ -6,13 +7,13 @@ import {
   INVITE_BOARD,
   LIKE_BOARD,
   LIKE_GOAL,
-  PEDESTAL_SPOTS,
   REBIRTH_STATUE,
   SPAWN,
-  STAGES_PORTAL,
   TRAILS_STALL,
   TRAINING_PAD_SPOTS,
   TRAINING_PADS,
+  VIP_BOOMERANG,
+  VIP_DISPLAY,
 } from '@game/shared'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MeshBasicMaterial } from 'three'
@@ -29,6 +30,7 @@ import {
   vGradient,
 } from '../canvasText'
 import { buildSignAtlas, type SignAtlas, type SignSpec } from '../signs'
+import { displayStart, isBackRow } from './boomerangDisplay'
 
 /** Font and icon images must be ready before anything is drawn into a canvas. */
 export function useCanvasAssets(): boolean {
@@ -72,14 +74,10 @@ interface SignInputs {
   rebirths: number
   bestStage: number
   boomerangsOwned: number
+  vip: boolean
 }
 
-/** First boomerang shown on the six display pedestals: the best owned one. */
-export function pedestalStart(owned: number): number {
-  return Math.max(0, Math.min(owned - 1, BOOMERANGS.length - PEDESTAL_SPOTS.length))
-}
-
-function buildSpecs({ rebirths, bestStage, boomerangsOwned }: SignInputs): SignSpec[] {
+function buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }: SignInputs): SignSpec[] {
   const specs: SignSpec[] = []
 
   // Gate.
@@ -136,35 +134,58 @@ function buildSpecs({ rebirths, bestStage, boomerangsOwned }: SignInputs): SignS
     })
   })
 
-  // Boomerang display.
-  specs.push({ w: 14, h: 2.8, x: 41, y: 10, z: 27.5, rotY: -Math.PI / 2, draw: header('BOOMERANGS', 'bolt') })
-  const start = pedestalStart(boomerangsOwned)
-  PEDESTAL_SPOTS.forEach((p, i) => {
+  // Boomerang Stage: a header, then "+Power / price / name" over every display.
+  specs.push({ w: 18, h: 3.6, x: 43.6, y: 14.5, z: 33, rotY: -Math.PI / 2, draw: header('BOOMERANGS', 'bolt') })
+  const start = displayStart(boomerangsOwned)
+  BOOMERANG_SPOTS.forEach((p, i) => {
     const b = BOOMERANGS[start + i]
     if (!b) return
     const owned = b.id < boomerangsOwned
     const isNext = b.id === boomerangsOwned
     specs.push({
-      w: 4,
-      h: 2.2,
+      w: 3.8,
+      h: 2,
       x: p.x,
-      y: 4.5,
+      // The back row's displays float above the front row's signs.
+      y: p.y + (isBackRow(i) ? 7.9 : 4.3),
       z: p.z,
       rotY: -Math.PI / 2,
       draw: (ctx, w, h) => {
-        drawOutlined(ctx, `+${formatNumber(b.power)} Power`, w / 2, h * 0.24, h * 0.3, '#5fd3ff', { maxWidth: w - 6 })
-        const label = owned ? 'OWNED' : `${formatNumber(b.cost)} WINS`
-        drawOutlined(ctx, label, w / 2, h * 0.6, h * 0.3, owned ? '#9cff6b' : isNext ? '#ffe14a' : '#ffb35c', {
-          maxWidth: w - 6,
-        })
-        drawOutlined(ctx, b.name, w / 2, h * 0.88, h * 0.2, '#ffffff', { maxWidth: w - 6 })
+        drawOutlined(ctx, `+${formatNumber(b.power)} Power`, w / 2, h * 0.2, h * 0.27, '#5fd3ff', { maxWidth: w - 6 })
+        if (owned) {
+          drawOutlined(ctx, 'OWNED', w / 2, h * 0.53, h * 0.3, '#9cff6b', { maxWidth: w - 6 })
+        } else {
+          drawIcon(ctx, 'trophy', w * 0.2, h * 0.53, h * 0.3)
+          drawOutlined(ctx, `${formatNumber(b.cost)} WINS`, w * 0.58, h * 0.53, h * 0.3, isNext ? '#ffe14a' : '#ffb35c', {
+            maxWidth: w * 0.72,
+          })
+        }
+        drawOutlined(ctx, b.name, w / 2, h * 0.85, h * 0.22, isNext ? '#ffffff' : '#dfe3ee', { maxWidth: w - 6 })
       },
     })
   })
+  specs.push({
+    w: 6.4,
+    h: 2.6,
+    x: VIP_DISPLAY.x,
+    y: VIP_DISPLAY.y + 6.4,
+    z: VIP_DISPLAY.z,
+    rotY: -Math.PI / 2,
+    draw: (ctx, w, h) => {
+      drawOutlined(ctx, 'VIP BOOMERANG', w / 2, h * 0.28, h * 0.34, vGradient(ctx, h * 0.1, h * 0.45, '#fff3a0', '#ffb300'), {
+        maxWidth: w - 6,
+      })
+      drawOutlined(ctx, `Always ${Math.round((VIP_BOOMERANG.multiplier - 1) * 100)}% stronger than your best!`, w / 2, h * 0.62, h * 0.15, '#ffffff', {
+        maxWidth: w - 8,
+      })
+      drawOutlined(ctx, vip ? 'OWNED' : 'Find it in the Halloween Egg!', w / 2, h * 0.86, h * 0.16, vip ? '#9cff6b' : '#ff8ae2', {
+        maxWidth: w - 8,
+      })
+    },
+  })
 
-  // Trails stall, stages portal.
+  // Trails stall.
   specs.push({ w: 8, h: 2, x: TRAILS_STALL.x, y: 6.4, z: TRAILS_STALL.z + 1.4, rotY: 0, draw: header('TRAILS', 'bolt') })
-  specs.push({ w: 8, h: 2, x: STAGES_PORTAL.x, y: 10.5, z: STAGES_PORTAL.z, rotY: 0, draw: header('STAGES', 'target') })
 
   // Rebirth statue: the player's rebirth icon floating above the pedestal.
   specs.push({
@@ -256,23 +277,36 @@ export function LobbySigns() {
   const rebirths = useGame((s) => s.data?.rebirths ?? 0)
   const bestStage = useGame((s) => s.data?.bestStageEver ?? 0)
   const boomerangsOwned = useGame((s) => s.data?.boomerangsOwned ?? 1)
+  const vip = useGame((s) => s.data?.vipBoomerang ?? false)
   const ppu = useQuality((s) => s.settings.signPpu)
   const maxSize = useQuality((s) => (s.settings.textureSize >= 512 ? 1024 : 512))
 
   const [atlas, setAtlas] = useState<SignAtlas | null>(null)
   const atlasRef = useRef<SignAtlas | null>(null)
 
+  // Painting ~50 outlined-text signs is slow on a phone CPU, so the first atlas
+  // waits until the player has joined and the browser is idle (time to playable);
+  // later rebuilds (a purchase, a rebirth) happen right away.
+  const joined = useGame((s) => s.data !== null)
+  const [deferDone, setDeferDone] = useState(false)
   useEffect(() => {
-    if (!ready) return
+    if (!ready || !joined || deferDone) return
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }
+    if (w.requestIdleCallback) w.requestIdleCallback(() => setDeferDone(true), { timeout: 1500 })
+    else window.setTimeout(() => setDeferDone(true), 300)
+  }, [ready, joined, deferDone])
+
+  useEffect(() => {
+    if (!deferDone) return
     const next = buildSignAtlas(
-      buildSpecs({ rebirths, bestStage, boomerangsOwned }),
+      buildSpecs({ rebirths, bestStage, boomerangsOwned, vip }),
       ppu,
       maxSize,
       atlasRef.current ?? undefined,
     )
     atlasRef.current = next
     setAtlas(next)
-  }, [ready, rebirths, bestStage, boomerangsOwned, ppu, maxSize])
+  }, [deferDone, rebirths, bestStage, boomerangsOwned, vip, ppu, maxSize])
 
   const material = useMemo(
     () => new MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false }),

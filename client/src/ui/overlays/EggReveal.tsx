@@ -2,6 +2,7 @@ import { EGG_BY_ID, PET_BY_ID, petBonus, RARITY, VIP_BOOMERANG } from '@game/sha
 import { useEffect, useState } from 'react'
 
 import { playSfx } from '../../audio/sfx'
+import { boomerangLook } from '../../game/boomerangShapes'
 import { useUI } from '../../state/uiStore'
 import { BoomerangIcon } from '../icons'
 import { PetPortrait } from '../PetPortrait'
@@ -60,7 +61,7 @@ export function EggReveal() {
           <div className="flex flex-wrap justify-center gap-5">
             {current.vip && (
               <div className="reveal-card" style={{ borderColor: VIP_BOOMERANG.color }}>
-                <BoomerangIcon size={110} color={VIP_BOOMERANG.color} />
+                <BoomerangIcon size={110} look={boomerangLook(0, true)} />
                 <span className="txt-outline text-[26px]" style={{ color: VIP_BOOMERANG.color }}>
                   VIP BOOMERANG!
                 </span>

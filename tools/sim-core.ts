@@ -21,8 +21,9 @@ import {
   MAX_SPEED,
   PAD_OFFSET,
   padWins,
+  levelForXp,
   rebirth,
-  rebirthCost,
+  rebirthLevel,
   STAGE_COUNT,
   THROW,
   TRAILS,
@@ -107,10 +108,7 @@ export function runSimulation(opts: SimOptions): SimResult {
   const nextTrail = () => TRAILS.find((x) => !d.trailsOwned.includes(x.id))
 
   function nextPurchaseCost(): number {
-    const costs = [BOOMERANGS[d.boomerangsOwned]?.cost ?? Infinity, nextTrail()?.cost ?? Infinity]
-    const rc = rebirthCost(d.rebirths)
-    if (costs.every((c) => c > rc)) costs.push(rc)
-    return Math.min(...costs)
+    return Math.min(BOOMERANGS[d.boomerangsOwned]?.cost ?? Infinity, nextTrail()?.cost ?? Infinity)
   }
 
   function shop(): void {
@@ -121,11 +119,9 @@ export function runSimulation(opts: SimOptions): SimResult {
       const t = nextTrail()
       if (t && buyTrail(d, t.id).ok) bought = true
     }
-    const rc = rebirthCost(d.rebirths)
-    const nextB = BOOMERANGS[d.boomerangsOwned]?.cost ?? Infinity
-    const nextT = nextTrail()?.cost ?? Infinity
-    // Rebirth once affordable and nothing cheaper is left worth buying first.
-    if (d.wins >= rc && nextB > rc && nextT > rc) {
+    // Rebirths cost no Wins, only a level: take one as soon as it's allowed
+    // (everything affordable has just been bought).
+    if (levelForXp(d.stats.powerEarned) >= rebirthLevel(d.rebirths)) {
       const stage = d.stageCleared
       rebirth(d)
       rebirths.push({ r: d.rebirths, t: time, stage })

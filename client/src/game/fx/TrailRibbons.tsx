@@ -147,7 +147,16 @@ class RibbonBuffers {
 function Ribbons({ players }: { players: boolean }) {
   const buffers = useMemo(() => new RibbonBuffers(), [])
   const material = useMemo(
-    () => new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: DoubleSide, toneMapped: false }),
+    () =>
+      new MeshBasicMaterial({
+        vertexColors: true,
+        transparent: true,
+        depthWrite: false,
+        side: DoubleSide,
+        // One pass: three.js would otherwise flip material.side twice a frame.
+        forceSinglePass: true,
+        toneMapped: false,
+      }),
     [],
   )
   useEffect(

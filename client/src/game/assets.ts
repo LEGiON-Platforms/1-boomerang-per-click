@@ -1,90 +1,9 @@
-import {
-  BoxGeometry,
-  BufferGeometry,
-  Color,
-  ExtrudeGeometry,
-  InstancedBufferAttribute,
-  type InstancedMesh,
-  MeshLambertMaterial,
-  MeshStandardMaterial,
-  Shape,
-} from 'three'
+import { BoxGeometry, Color, MeshLambertMaterial } from 'three'
 
 /**
  * Shared geometries and materials (performance contract: created once at module
  * level, reused by every mesh and instance that needs them).
  */
-
-/* ---------------------------------------------------------------------------
- * Boomerang
- * ------------------------------------------------------------------------- */
-
-function boomerangShape(): Shape {
-  // A classic V boomerang, ~1.7 units tip to tip, drawn in the XY plane.
-  const s = new Shape()
-  s.moveTo(0, 0.34)
-  s.lineTo(0.78, -0.2)
-  s.quadraticCurveTo(0.92, -0.32, 0.78, -0.44)
-  s.lineTo(0, 0.06)
-  s.lineTo(-0.78, -0.44)
-  s.quadraticCurveTo(-0.92, -0.32, -0.78, -0.2)
-  s.lineTo(0, 0.34)
-  return s
-}
-
-let boomerangGeo: BufferGeometry | null = null
-
-/** Low-poly extruded boomerang lying flat in the XZ plane, centred on its elbow. */
-export function getBoomerangGeometry(): BufferGeometry {
-  if (!boomerangGeo) {
-    const g = new ExtrudeGeometry(boomerangShape(), {
-      depth: 0.09,
-      bevelEnabled: true,
-      bevelThickness: 0.03,
-      bevelSize: 0.03,
-      bevelSegments: 1,
-      curveSegments: 3,
-    })
-    g.translate(0, 0, -0.045)
-    g.rotateX(-Math.PI / 2)
-    g.computeVertexNormals()
-    boomerangGeo = g
-  }
-  return boomerangGeo
-}
-
-/* ---------------------------------------------------------------------------
- * Instanced material with a per-instance glow
- * ------------------------------------------------------------------------- */
-
-/**
- * A MeshStandardMaterial whose instances each pick a glow amount through an
- * `instanceGlow` attribute: emissive = instanceColor × glow. Lets every tier of
- * boomerang (matte wood … glowing plasma) share one draw call.
- */
-export function createGlowInstancedMaterial(): MeshStandardMaterial {
-  const m = new MeshStandardMaterial({ roughness: 0.45, metalness: 0.15 })
-  m.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float instanceGlow;\nvarying float vGlow;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGlow = instanceGlow;')
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vGlow;')
-      .replace(
-        '#include <emissivemap_fragment>',
-        '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * vGlow * 0.9;',
-      )
-  }
-  m.customProgramCacheKey = () => 'glow-instanced'
-  return m
-}
-
-/** Adds the per-instance glow attribute that createGlowInstancedMaterial reads. */
-export function attachGlowAttribute(mesh: InstancedMesh, capacity: number): InstancedBufferAttribute {
-  const attr = new InstancedBufferAttribute(new Float32Array(capacity), 1)
-  mesh.geometry.setAttribute('instanceGlow', attr)
-  return attr
-}
 
 /* ---------------------------------------------------------------------------
  * Two-tone instanced material (pets): body = instanceColor, accent = instanceAccent

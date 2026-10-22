@@ -7,8 +7,9 @@ import { BOOMERANGS, VIP_BOOMERANG } from '../config/boomerangs'
 import {
   clickGain,
   levelForXp,
+  levelProgress,
   padWins,
-  rebirthCost,
+  rebirthLevel,
   STAGE_COUNT,
 } from '../config/economy'
 import { TRAINING_PADS, isPadUnlocked } from '../config/pads'
@@ -141,8 +142,14 @@ export function bestUnlockedEgg(d: PlayerData): EggDef {
   return best
 }
 
+/** 0..1 towards the next rebirth's level (fractional levels, from level 1). */
+export function rebirthProgressForXp(xp: number, rebirths: number): number {
+  const level = levelForXp(xp) + levelProgress(xp)
+  return Math.min(1, Math.max(0, (level - 1) / (rebirthLevel(rebirths) - 1)))
+}
+
 export function rebirthProgress(d: PlayerData): number {
-  return Math.min(1, d.wins / rebirthCost(d.rebirths))
+  return rebirthProgressForXp(d.stats.powerEarned, d.rebirths)
 }
 
 export function autoThrowUnlocked(d: PlayerData): boolean {

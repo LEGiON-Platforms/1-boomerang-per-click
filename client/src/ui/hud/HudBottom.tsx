@@ -1,5 +1,6 @@
 import {
   autoThrowUnlocked,
+  BOOMERANGS,
   BOOSTS,
   type BoostId,
   C2S,
@@ -8,7 +9,6 @@ import {
   formatGain,
   formatNumber,
   formatTimer,
-  friendBoostFraction,
   isPadUnlocked,
   levelForXp,
   levelProgress,
@@ -17,12 +17,14 @@ import {
 
 import { playSfx } from '../../audio/sfx'
 import { interact } from '../../game/interact'
+import { displayStart } from '../../game/lobby/boomerangDisplay'
 import { send } from '../../net/connection'
 import { isTouchDevice } from '../../state/qualityStore'
 import { useGame, type InteractTarget } from '../../state/gameStore'
 import { ui } from '../../state/uiStore'
-import { useServerClock } from '../hooks'
-import { FriendsIcon, HandIcon, LockIcon, PowerBurstIcon, RebirthIcon } from '../icons'
+import { useGameThrottled, useServerClock } from '../hooks'
+import { HandIcon, PowerBurstIcon } from '../icons'
+import { Num } from '../Num'
 
 const QUICK_COLORS = ['bg-green', 'bg-blue', 'bg-yellow', 'bg-red']
 
@@ -33,9 +35,10 @@ function useFriendsInRoom(): number {
   return players.filter((p) => !p.isLocal && friends.includes(p.pid)).length
 }
 
-/** Four quick-train buttons: the best unlocked pads (+ next locked), teleport on tap. */
+/** Four training buttons: the best unlocked pads (+ the next locked one); tap to teleport. */
 function QuickTrain() {
   const data = useGame((s) => s.data)
+  const onPad = useGame((s) => s.onPad)
   const friends = useFriendsInRoom()
   const now = useServerClock(5000)
   if (!data) return null
@@ -43,25 +46,29 @@ function QuickTrain() {
   const end = Math.min(TRAINING_PADS.length - 1, Math.max(3, best + (best < TRAINING_PADS.length - 1 ? 1 : 0)))
   const pads = TRAINING_PADS.slice(end - 3, end + 1)
   return (
-    <div className="mt-6 flex gap-5">
+    <div className="train-row">
       {pads.map((pad, i) => {
         const unlocked = isPadUnlocked(pad.id, data.rebirths)
-        const gain = clickGainFor(data, { padId: pad.id, friendsInRoom: friends, now })
+        // Locked pads still show what they would give, so there is something to aim for.
+        const gain = unlocked
+          ? clickGainFor(data, { padId: pad.id, friendsInRoom: friends, now })
+          : clickGainFor(data, { padId: -1, friendsInRoom: friends, now }) * pad.mult
         return (
           <button
             key={pad.id}
             type="button"
-            className={`btn3d studs quick-train ${QUICK_COLORS[i]}`}
+            className={`btn3d studs train-tile ${QUICK_COLORS[i]} ${onPad === pad.id ? 'active' : ''}`}
             onClick={() => {
               playSfx('click')
               if (unlocked) send(C2S.teleportPad, { pad: pad.id })
               else ui().toast(`Unlocks at Rebirth ${pad.requiredRebirths}`, 'error')
             }}
           >
-            <span className="txt-outline">{unlocked ? `+${formatGain(gain)}` : <LockIcon size={40} />}</span>
-            <span className="tag txt-outline" style={{ color: unlocked ? '#7dff6b' : '#ff6b6b' }}>
-              {pad.requiredRebirths > 0 && <RebirthIcon size={22} />}
-              {unlocked ? `x${pad.mult}` : pad.requiredRebirths}
+            <Num value={`+${formatGain(gain)}`} className="gain txt-outline" />
+            {/* Rebirths needed, as a green token like the original (pad 1 shows its multiplier). */}
+            <span className="tag txt-outline">
+              {pad.requiredRebirths > 0 && <span className="rb-token" />}
+              <Num value={pad.requiredRebirths > 0 ? String(pad.requiredRebirths) : `x${pad.mult}`} />
             </span>
           </button>
         )
@@ -74,7 +81,7 @@ function InteractPrompt() {
   const target = useGame((s) => s.nearInteract)
   const data = useGame((s) => s.data)
   if (!target || !data) return null
-  const label = promptLabel(target)
+  const label = promptLabel(target, data.boomerangsOwned)
   return (
     <button type="button" className="interact-prompt txt-outline mb-3" onClick={interact}>
       {!isTouchDevice() && <span className="key-cap">E</span>}
@@ -83,36 +90,57 @@ function InteractPrompt() {
   )
 }
 
-function promptLabel(t: InteractTarget): string {
+function promptLabel(t: InteractTarget, owned: number): string {
   switch (t.kind) {
     case 'trails':
       return 'Open Trails'
     case 'rebirth':
       return 'Rebirth'
-    case 'stages':
-      return 'Choose a Stage'
     case 'egg':
       return `Open ${EGGS[t.index]?.name ?? 'Egg'}`
-    case 'pedestal':
-      return 'Buy Boomerang'
+    case 'pedestal': {
+      const b = BOOMERANGS[displayStart(owned) + t.index]
+      if (!b) return 'Boomerang Shop'
+      if (b.id === owned) return `Buy ${b.name} · ${formatNumber(b.cost)} Wins`
+      return b.id < owned ? `${b.name} (Owned)` : 'Boomerang Shop'
+    }
   }
 }
 
+/** Leaf components own the per-throw subscriptions, so a throw re-renders only them. */
+const selectPower = (s: { power: number }) => Math.floor(s.power)
+const selectLevelPct = (s: { xp: number }) => Math.floor(levelProgress(s.xp) * 200) / 2
+const selectLevel = (s: { xp: number }) => levelForXp(s.xp)
+
+function PowerBadge() {
+  const power = useGameThrottled(selectPower)
+  return (
+    <div className="power-badge" data-fly-target="power">
+      <PowerBurstIcon size={124} className="burst" />
+      <Num value={`${formatNumber(power)} Power`} className="value txt-outline" />
+    </div>
+  )
+}
+
+function LevelBar() {
+  // Quantised and throttled so tiny XP gains don't re-render the bar.
+  const pct = useGameThrottled(selectLevelPct)
+  const level = useGameThrottled(selectLevel)
+  return (
+    <div className="level-bar">
+      {/* Slid by transform, not width: no layout or repaint as XP ticks up. */}
+      <div className="fill" style={{ transform: `translateX(${pct - 100}%)` }} />
+      <Num value={`LEVEL ${level}`} className="text txt-outline" />
+    </div>
+  )
+}
+
 export function HudBottom() {
-  const power = useGame((s) => s.power)
-  const xp = useGame((s) => s.xp)
-  const level = levelForXp(xp)
   return (
     <div className="hud-group hud-bc flex flex-col items-center">
       <InteractPrompt />
-      <div className="power-badge">
-        <PowerBurstIcon className="burst" />
-        <span className="value txt-outline">{formatNumber(power)} Power</span>
-      </div>
-      <div className="level-bar">
-        <div className="fill" style={{ width: `${levelProgress(xp) * 100}%` }} />
-        <span className="text txt-outline">LEVEL {level}</span>
-      </div>
+      <PowerBadge />
+      <LevelBar />
       <QuickTrain />
     </div>
   )
@@ -120,11 +148,10 @@ export function HudBottom() {
 
 const BOOST_ORDER: BoostId[] = ['click3x', 'power2x', 'wins2x', 'training2x']
 
-/** Bottom-left: active boost timers, friend boost, auto-throw toggle. */
+/** Bottom-left: the auto-throw switch and active boost timers. */
 export function HudBottomLeft() {
   const data = useGame((s) => s.data)
   const autoThrow = useGame((s) => s.autoThrow)
-  const friends = useFriendsInRoom()
   const now = useServerClock(1000)
   if (!data) return null
   const active = BOOST_ORDER.filter((id) => (data.boosts[id] ?? 0) > now)
@@ -149,14 +176,6 @@ export function HudBottomLeft() {
           <span>{formatTimer(((data.boosts[id] ?? 0) - now) / 1000)}</span>
         </div>
       ))}
-      <button type="button" className="boost-row txt-outline" onClick={() => ui().openPanel('friends')}>
-        <FriendsIcon size={40} />
-        <span>Friend Boost:</span>
-        <span style={{ color: '#ffd21f' }}>{Math.round(friendBoostFraction(friends) * 100)}%</span>
-        <span className="text-[34px]" style={{ color: '#2ee66b' }}>
-          +
-        </span>
-      </button>
     </div>
   )
 }

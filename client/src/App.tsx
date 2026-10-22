@@ -5,13 +5,14 @@ import { useBloxitySession as useBloxity } from './bloxity/session'
 import { bindKeyboard } from './game/controls'
 import { GameCanvas } from './game/GameCanvas'
 import { startLogic } from './game/logicTick'
-import { connect } from './net/connection'
 import { getSavedName } from './net/identity'
 import { useGame } from './state/gameStore'
 import { isTouchDevice } from './state/qualityStore'
 import { useUI } from './state/uiStore'
 import { mountFloatingLayer } from './ui/floating'
 import { Hud } from './ui/Hud'
+import { NameTags } from './ui/NameTags'
+import { prefetchPanels } from './ui/PanelHost'
 import { ConnectionOverlay, LoadingScreen, MobileControls, NamePrompt } from './ui/Screens'
 
 /** HUD scale: the HUD is laid out for ~1600×900 and scales to fit any screen. */
@@ -28,7 +29,7 @@ function useHudScale(): void {
 }
 
 export default function App() {
-  const { game } = useBloxity()
+  const { game, status: sdkStatus } = useBloxity()
   const rootRef = useRef<HTMLDivElement>(null)
   const [avatarReady, setAvatarReady] = useState(false)
   const [firstFrame, setFirstFrame] = useState(false)
@@ -47,20 +48,39 @@ export default function App() {
     return () => window.removeEventListener('pointerdown', unlock)
   }, [])
 
-  // Returning players join straight away; first-timers pick a name first.
+  // Returning players are already joining (main.tsx); first-timers pick a name first.
   useEffect(() => {
-    const saved = getSavedName()
-    if (saved) void connect(saved)
-    else useUI.getState().set({ needsName: true })
+    if (!getSavedName()) useUI.getState().set({ needsName: true })
   }, [])
 
-  const ready = avatarReady && firstFrame && hasData
+  // Playable once joined and a frame is on screen; the Bloxity avatar streams in
+  // behind a stand-in body rather than holding up the loading screen.
+  const ready = firstFrame && hasData
   useEffect(() => {
     game.loadingStep(status === 'connected' ? 'Loading world…' : 'Connecting…')
   }, [game, status])
   useEffect(() => {
-    if (ready) game.loadingEnd()
+    if (!ready) return
+    game.loadingEnd()
+    prefetchPanels()
   }, [ready, game])
+
+  // Startup milestones for tools/perf-probe.ts (performance.getEntriesByType('mark')).
+  useEffect(() => {
+    if (firstFrame) performance.mark('bpc:first-frame')
+  }, [firstFrame])
+  useEffect(() => {
+    if (avatarReady) performance.mark('bpc:avatar')
+  }, [avatarReady])
+  useEffect(() => {
+    if (hasData) performance.mark('bpc:joined')
+  }, [hasData])
+  useEffect(() => {
+    if (ready) performance.mark('bpc:playable')
+  }, [ready])
+  useEffect(() => {
+    if (sdkStatus === 'ready') performance.mark('bpc:sdk')
+  }, [sdkStatus])
 
   const onAvatarReady = useCallback(() => setAvatarReady(true), [])
   const onFirstFrame = useCallback(() => setFirstFrame(true), [])
@@ -68,6 +88,7 @@ export default function App() {
   return (
     <div ref={rootRef} className={`relative h-screen w-screen overflow-hidden ${isTouchDevice() ? 'touch' : ''}`}>
       <GameCanvas onAvatarReady={onAvatarReady} onFirstFrame={onFirstFrame} />
+      {hasData && <NameTags />}
       {hasData && <Hud />}
       {hasData && <MobileControls />}
       <LoadingScreen ready={ready} />

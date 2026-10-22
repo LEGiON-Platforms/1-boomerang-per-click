@@ -1,7 +1,8 @@
-import { BOOMERANGS, TRAINING_PAD_SPOTS, VIP_BOOMERANG } from '@game/shared'
+import { TRAINING_PAD_SPOTS } from '@game/shared'
 import { Vector3 } from 'three'
 
 import { playSfx } from '../../audio/sfx'
+import { type BoomerangLook, boomerangLook } from '../boomerangShapes'
 import { now, triggerShake } from '../runtime'
 import { burst } from './particles'
 
@@ -25,9 +26,8 @@ export interface Projectile {
   t: number
   from: Vector3
   to: Vector3
-  /** Body colour as a number (0xRRGGBB) so frame loops never parse strings. */
-  color: number
-  glow: number
+  /** Which boomerang it is (shared look object). */
+  look: BoomerangLook
   trail: number
   /** Effect to play at impact (IMPACT value), filled in when the result arrives. */
   impact: number
@@ -44,8 +44,7 @@ export const projectiles: Projectile[] = Array.from({ length: PROJECTILE_CAPACIT
   t: 0,
   from: new Vector3(),
   to: new Vector3(),
-  color: 0xffffff,
-  glow: 0,
+  look: boomerangLook(0),
   trail: 0,
   impact: IMPACT.none,
   impactPlayed: false,
@@ -55,16 +54,6 @@ export const projectiles: Projectile[] = Array.from({ length: PROJECTILE_CAPACIT
 
 let cursor = 0
 let nextId = 1
-
-const hex = (s: string) => parseInt(s.slice(1), 16)
-const LOOKS = BOOMERANGS.map((b) => ({ color: b.color, hex: hex(b.color), glow: b.glow }))
-const VIP_LOOK = { color: VIP_BOOMERANG.color, hex: hex(VIP_BOOMERANG.color), glow: VIP_BOOMERANG.glow }
-
-/** Colour/glow of a boomerang; returns a shared object — don't mutate it. */
-export function boomerangLook(id: number, vip: boolean): { color: string; hex: number; glow: number } {
-  if (vip) return VIP_LOOK
-  return LOOKS[Math.min(Math.max(id, 0), LOOKS.length - 1)]
-}
 
 export function launch(
   owner: string,
@@ -78,7 +67,6 @@ export function launch(
   // Reuse the oldest slot if every one is in flight.
   const p = projectiles[cursor]
   cursor = (cursor + 1) % PROJECTILE_CAPACITY
-  const look = boomerangLook(boomerang, vip)
   p.active = true
   p.id = nextId++
   p.owner = owner
@@ -86,8 +74,7 @@ export function launch(
   p.t = 0
   p.from.set(from.x, from.y, from.z)
   p.to.set(to.x, to.y, to.z)
-  p.color = look.hex
-  p.glow = look.glow
+  p.look = boomerangLook(boomerang, vip)
   p.trail = trail
   p.impact = IMPACT.none
   p.impactPlayed = false

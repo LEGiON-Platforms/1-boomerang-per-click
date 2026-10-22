@@ -69,6 +69,18 @@ export function collectRig(root) {
     }
   })
 
+  // SkeletonUtils.clone gives every skinned mesh its own Skeleton copy over the same
+  // bones, so each one re-uploads an identical bone texture every frame. When the
+  // bone lists match exactly, drive all parts from one skeleton instead.
+  for (const mesh of rig.skinnedMeshes) {
+    const s = mesh.skeleton
+    if (!rig.skeleton || s === rig.skeleton) continue
+    const shared = rig.skeleton.bones
+    if (s.bones.length === shared.length && s.bones.every((b, i) => b === shared[i])) {
+      mesh.skeleton = rig.skeleton
+    }
+  }
+
   const skeleton = rig.skeleton
   if (skeleton) {
     for (const bone of skeleton.bones) {
@@ -105,6 +117,8 @@ export function collectRig(root) {
       entry.axisX = new Vector3(1, 0, 0).applyQuaternion(relInv).normalize()
       /** Local axis to rotate about for lateral sway. */
       entry.axisZ = new Vector3(0, 0, 1).applyQuaternion(relInv).normalize()
+      /** Local axis to rotate about for a twist (the character's vertical). */
+      entry.axisY = new Vector3(0, 1, 0).applyQuaternion(relInv).normalize()
     }
 
     rig.hatBone = skeleton.bones.find((b) => b.name === HAT_BONE) || null
@@ -329,69 +343,108 @@ function rotateBone(rig, name, which, angle) {
 const swing = (rig, name, angle) => rotateBone(rig, name, 'axisX', angle)
 /** Sway a limb out to the side. */
 const sway = (rig, name, angle) => rotateBone(rig, name, 'axisZ', angle)
+/** Turn about the vertical axis (shoulders twisting into a throw). */
+const twist = (rig, name, angle) => rotateBone(rig, name, 'axisY', angle)
 
 /**
  * Poses the rig for the current motion state.
  *
  * @param {object} rig from `collectRig`
  * @param {{ time: number, speed: number, grounded: boolean, maxSpeed: number,
- *           throwPhase?: number }} motion
- *   `speed` is horizontal speed in world units/sec; `maxSpeed` is what counts as a
- *   full-amplitude run, so the cycle scales smoothly from a walk to a sprint.
+ *           velY?: number, throwPhase?: number }} motion
+ *   `speed` is horizontal speed in world units/sec; `maxSpeed` is a full-amplitude
+ *   run (faster than that only quickens the stride). `velY` is vertical speed.
  *   `throwPhase` runs 0..1 through a boomerang throw (negative = not throwing).
  */
 export function animateRig(rig, motion) {
   if (!rig?.skeleton || !motion) return
   poseBase(rig, motion)
-  poseThrow(rig, motion.throwPhase ?? -1)
+  const phase = motion.throwPhase ?? -1
+  if (phase >= 0 && phase < 1) poseThrow(rig, phase)
+  else if (motion.grounded !== false) poseArm(rig, CARRY, CARRY, 0)
+}
+
+/*
+ * The right arm always carries a boomerang. Key poses for it, as
+ * [upper-arm swing, upper-arm sway, forearm swing, shoulder twist, left-arm reach]
+ * (negative swing = forward/up, positive sway = out to the side, positive twist =
+ * turn left, negative reach = the left arm reaching forward too).
+ */
+const CARRY = [-0.3, 0.16, -0.45, 0, 0] // arm by the side, boomerang held upright at the hip
+const WIND_UP = [0.3, 1.35, -1.1, -0.75, -0.55] // arm swung out and back, shoulders turned away
+const RELEASE = [-1.4, 0.35, -0.12, 0.55, -1.3] // both arms swept forward across the body
+/** Sidearm throw timeline (fractions of the throw): wind-up ends, release ends. */
+export const THROW_WIND_END = 0.2
+export const THROW_RELEASE_END = 0.45
+
+const ease = (t) => t * t * (3 - 2 * t)
+
+function poseArm(rig, a, b, t) {
+  const k = ease(Math.min(1, Math.max(0, t)))
+  sway(rig, 'ArmR1', a[1] + (b[1] - a[1]) * k)
+  swing(rig, 'ArmR1', a[0] + (b[0] - a[0]) * k)
+  swing(rig, 'ArmR2', a[2] + (b[2] - a[2]) * k)
+  twist(rig, 'Spine1', a[3] + (b[3] - a[3]) * k)
+  const reach = a[4] + (b[4] - a[4]) * k
+  if (reach) {
+    swing(rig, 'ArmL1', reach)
+    sway(rig, 'ArmL1', reach * 0.35) // in towards the throwing side
+  }
 }
 
 /**
- * Overhand throw layered on top of whatever the legs are doing: the right arm
- * winds up overhead, whips forward, then settles back.
+ * Sidearm throw layered over the legs: the arm swings out and back while the
+ * shoulders turn away, then whips forward across the body to release, and
+ * settles back to the carry.
  */
 function poseThrow(rig, phase) {
-  if (!(phase >= 0 && phase < 1)) return
-  let arm
-  if (phase < 0.3) arm = -2.7 * (phase / 0.3)
-  else if (phase < 0.55) arm = -2.7 + 2.3 * ((phase - 0.3) / 0.25)
-  else arm = -0.4 * (1 - (phase - 0.55) / 0.45)
-  swing(rig, 'ArmR1', arm)
-  swing(rig, 'ArmR2', phase < 0.3 ? -0.5 * (phase / 0.3) : -0.5 * Math.max(0, 1 - (phase - 0.3) / 0.4))
-  swing(rig, 'Spine1', phase < 0.3 ? 0.1 * (phase / 0.3) : -0.12 * Math.sin(((phase - 0.3) / 0.7) * Math.PI))
+  if (phase < THROW_WIND_END) poseArm(rig, CARRY, WIND_UP, phase / THROW_WIND_END)
+  else if (phase < THROW_RELEASE_END) {
+    poseArm(rig, WIND_UP, RELEASE, (phase - THROW_WIND_END) / (THROW_RELEASE_END - THROW_WIND_END))
+  } else poseArm(rig, RELEASE, CARRY, (phase - THROW_RELEASE_END) / (1 - THROW_RELEASE_END))
 }
 
 function poseBase(rig, motion) {
-  const { time = 0, speed = 0, grounded = true, maxSpeed = 6 } = motion
+  const { time = 0, speed = 0, grounded = true, maxSpeed = 6, velY = 0 } = motion
   const ratio = Math.min(speed / Math.max(maxSpeed, 0.001), 1)
 
   rig.root.position.y = rig.rootRestY
 
-  // --- Airborne: tuck the legs, throw the arms up ---------------------------
+  // --- Airborne: one knee driven up, arms out for balance; the legs reach down
+  // as the jump turns into a fall ----------------------------------------------
   if (!grounded) {
-    swing(rig, 'LegL1', -0.55)
-    swing(rig, 'LegL2', 0.75)
-    swing(rig, 'LegR1', 0.3)
-    swing(rig, 'LegR2', 0.2)
-    swing(rig, 'ArmL1', -2.1)
-    swing(rig, 'ArmR1', -2.1)
-    swing(rig, 'Spine1', -0.1)
+    const fall = Math.min(1, Math.max(0, -velY / 8))
+    swing(rig, 'LegL1', -0.95 + fall * 0.55)
+    swing(rig, 'LegL2', 1.25 - fall * 0.7)
+    swing(rig, 'LegR1', 0.35 - fall * 0.2)
+    swing(rig, 'LegR2', 0.55 - fall * 0.3)
+    sway(rig, 'ArmL1', -1.0 - fall * 0.35)
+    swing(rig, 'ArmL1', -0.35)
+    sway(rig, 'ArmR1', 0.55 + fall * 0.3)
+    swing(rig, 'ArmR1', -0.6)
+    swing(rig, 'ArmR2', -0.5)
+    swing(rig, 'Spine1', -0.12 + fall * 0.1)
     return
   }
 
-  // --- Standing still: a slow breathing sway --------------------------------
+  // --- Standing still: relaxed, weight on one leg, breathing (the boomerang
+  // arm is posed by animateRig) ---------------------------------------------------
   if (ratio < 0.04) {
-    const idle = Math.sin(time * 1.6)
-    sway(rig, 'ArmL1', -0.07 - idle * 0.03)
-    sway(rig, 'ArmR1', 0.07 + idle * 0.03)
-    swing(rig, 'Spine1', idle * 0.02)
-    rig.root.position.y = rig.rootRestY + idle * 0.03
+    const breath = Math.sin(time * 1.8)
+    sway(rig, 'LegL1', -0.06)
+    sway(rig, 'LegR1', 0.04)
+    sway(rig, 'ArmL1', -0.14 - breath * 0.03)
+    swing(rig, 'ArmL2', -0.2)
+    swing(rig, 'Spine1', breath * 0.015)
+    rig.root.position.y = rig.rootRestY + breath * 0.02
     return
   }
 
   // --- Walk / run cycle -----------------------------------------------------
-  // Step frequency rises with speed so a sprint doesn't look like a moonwalk.
-  const phase = time * (5 + ratio * 5)
+  // Step frequency follows the actual speed (level bonuses included) so a fast
+  // runner never looks like a moonwalk; the swing amplitude caps at a full run.
+  const stride = Math.min(speed / Math.max(maxSpeed, 0.001), 1.7)
+  const phase = time * (5 + stride * 5)
   const cycle = Math.sin(phase)
   const legAmp = 0.85 * ratio
   const armAmp = 0.7 * ratio
@@ -402,11 +455,10 @@ function poseBase(rig, motion) {
   swing(rig, 'LegL2', Math.max(0, -cycle) * 1.1 * ratio)
   swing(rig, 'LegR2', Math.max(0, cycle) * 1.1 * ratio)
 
-  // Arms counter-swing against the legs.
+  // Arms counter-swing against the legs; the boomerang arm swings less.
   swing(rig, 'ArmL1', -cycle * armAmp)
-  swing(rig, 'ArmR1', cycle * armAmp)
+  swing(rig, 'ArmR1', cycle * armAmp * 0.45)
   swing(rig, 'ArmL2', Math.max(0, cycle) * 0.5 * ratio)
-  swing(rig, 'ArmR2', Math.max(0, -cycle) * 0.5 * ratio)
 
   // Lean into the run, and bob once per step (twice per full cycle).
   swing(rig, 'Spine1', -0.14 * ratio)

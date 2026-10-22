@@ -31,6 +31,12 @@ export interface QualitySettings {
   remotePets: boolean
   /** Stages rendered on each side of the current one. */
   stageWindow: number
+  /**
+   * Lighter HUD effects: fast taps merge into one flying "+X" every 350 ms, HUD
+   * numbers refresh every 200 ms and the Power counter doesn't bump (fewer DOM
+   * updates to lay out and paint).
+   */
+  lightHud: boolean
 }
 
 export const PRESETS: Record<Preset, QualitySettings> = {
@@ -50,6 +56,7 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     nameTagDistance: 25,
     remotePets: false,
     stageWindow: 0,
+    lightHud: true,
   },
   MEDIUM: {
     dpr: [1, 1.5],
@@ -67,6 +74,7 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     nameTagDistance: 45,
     remotePets: true,
     stageWindow: 1,
+    lightHud: false,
   },
   HIGH: {
     dpr: [1, 2],
@@ -84,6 +92,7 @@ export const PRESETS: Record<Preset, QualitySettings> = {
     nameTagDistance: 60,
     remotePets: true,
     stageWindow: 1,
+    lightHud: false,
   },
 }
 

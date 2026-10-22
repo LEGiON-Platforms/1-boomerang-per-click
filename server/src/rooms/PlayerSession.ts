@@ -58,8 +58,8 @@ export class PlayerSession {
   /** A coalesced save is already queued. */
   saveScheduled = false
   level: number
-  /** Pending "Farm Again" respawn. */
-  farmTimer: { clear(): void } | null = null
+  /** Pending return to the lobby after a win pad. */
+  respawnTimer: { clear(): void } | null = null
 
   constructor(
     /** Replaced on reconnection. */

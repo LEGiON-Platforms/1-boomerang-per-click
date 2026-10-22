@@ -6,8 +6,41 @@ import { send } from '../../net/connection'
 import { saveName } from '../../net/identity'
 import { useGame } from '../../state/gameStore'
 import { type Preset, useQuality } from '../../state/qualityStore'
-import { ui } from '../../state/uiStore'
+import { type PanelId, ui } from '../../state/uiStore'
+import { useRewardAlerts } from '../hud/rewardAlerts'
+import { CalendarIcon, CodeIcon, FriendsIcon, GiftIcon, TargetIcon, TimerIcon } from '../icons'
 import { Window } from '../Window'
+
+function RewardButton({ panel, label, icon, alert, caption }: { panel: PanelId; label: string; icon: React.ReactNode; alert?: boolean; caption?: string }) {
+  return (
+    <button type="button" className="btn3d reward-btn bg-dark" onClick={() => ui().openPanel(panel)}>
+      {icon}
+      <span className="txt-outline text-[20px]">{label}</span>
+      {caption && (
+        <span className="txt-outline text-[16px]" style={{ color: alert ? '#ffe14a' : '#c9cfdd' }}>
+          {caption}
+        </span>
+      )}
+      {alert && <span className="badge-alert txt-outline">!</span>}
+    </button>
+  )
+}
+
+/** Daily rewards, playtime gifts, quests, codes, friends and stages — they live here, not on the HUD. */
+function RewardsRow() {
+  const a = useRewardAlerts()
+  if (!a) return null
+  return (
+    <div className="mb-4 grid grid-cols-3 gap-3 sm:grid-cols-6">
+      <RewardButton panel="daily" label="Daily" icon={<CalendarIcon size={50} day={a.dailyDay} />} alert={a.daily} caption={a.daily ? 'CLAIM!' : undefined} />
+      <RewardButton panel="gifts" label="Gifts" icon={<TimerIcon size={50} />} alert={a.gift} caption={a.giftCaption} />
+      <RewardButton panel="quests" label="Quests" icon={<GiftIcon size={50} />} alert={a.quest} />
+      <RewardButton panel="codes" label="Codes" icon={<CodeIcon size={50} />} />
+      <RewardButton panel="friends" label="Friends" icon={<FriendsIcon size={50} />} />
+      <RewardButton panel="stages" label="Stages" icon={<TargetIcon size={50} />} />
+    </div>
+  )
+}
 
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -31,6 +64,7 @@ export function SettingsPanel() {
 
   return (
     <Window title="Settings" onClose={() => ui().closePanel()} width={760}>
+      <RewardsRow />
       <div className="list-row flex-wrap justify-between gap-3">
         <span className="txt-outline text-[26px]">Graphics</span>
         <div className="flex flex-wrap gap-2">

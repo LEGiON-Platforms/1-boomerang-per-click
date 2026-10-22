@@ -10,17 +10,14 @@ import {
   GEM_SHOP,
   type GemItemId,
   type LeaderboardsMsg,
-  type LuckyWinnerMsg,
   type OfflineMsg,
   type PadClaimedMsg,
   type PurchaseMsg,
-  RARITY,
   type RewardMsg,
   ROOM_NAME,
   type RunState,
   S2C,
   type SelfMsg,
-  stageDef,
   type TeleportMsg,
   TRAILS,
   BOOMERANGS,
@@ -32,11 +29,11 @@ import {
 
 import { playSfx } from '../audio/sfx'
 import { onThrowResult, onRemoteThrow } from '../game/throwing'
-import { cameraState, pending } from '../game/runtime'
 import { confetti } from '../game/fx/particles'
-import { localPlayer } from '../game/runtime'
+import { cameraState, devPose, localPlayer, pending, playerScreenPoint } from '../game/runtime'
 import { game, type RoomPlayerInfo, useGame } from '../state/gameStore'
 import { ui, useUI } from '../state/uiStore'
+import { flyTrophies } from '../ui/floating'
 import { getPlayerId } from './identity'
 import { addRemote, clearRemotes, createRemote, pushSnapshot, removeRemote } from './remote'
 
@@ -70,6 +67,8 @@ if (import.meta.env.DEV) {
   w.__bpcTeleport = (stage) => send(C2S.teleportStage, { stage })
   w.__bpcSend = (type, payload) => send(type, payload)
   ;(window as unknown as { __bpcUI: typeof useUI }).__bpcUI = useUI
+  ;(window as unknown as { __bpcGame: typeof useGame }).__bpcGame = useGame
+  ;(window as unknown as { __bpcRuntime: object }).__bpcRuntime = { localPlayer, cameraState, devPose }
 }
 
 /** Sends a message to the game room (dropped while disconnected). */
@@ -77,8 +76,13 @@ export function send(type: string, payload?: unknown): void {
   room?.send(type, payload)
 }
 
+let connecting = false
+
+/** Joins the game room. Idempotent: a second call while connecting/connected is ignored. */
 export async function connect(name: string): Promise<void> {
   joinName = name
+  if (connecting || room) return
+  connecting = true
   if (retryTimer !== null) window.clearTimeout(retryTimer)
   retryTimer = null
   useGame.getState().setStatus('connecting')
@@ -91,10 +95,12 @@ export async function connect(name: string): Promise<void> {
       : await client.joinOrCreate(ROOM_NAME, options)
   } catch (err) {
     console.warn('[net] join failed', err)
+    connecting = false
     useGame.getState().setStatus('error', 'Could not reach the game server. Retrying…')
     retryTimer = window.setTimeout(() => void connect(joinName), RETRY_MS)
     return
   }
+  connecting = false
   bindRoom(room)
 }
 
@@ -152,7 +158,7 @@ function bindRoom(r: Room): void {
   r.onMessage(S2C.toast, (m: ToastMsg) => ui().toast(m.text, m.kind))
   r.onMessage(S2C.badge, (m: BadgeMsg) => {
     const b = BADGES[m.id]
-    ui().toast('Badge Awarded', 'badge', `${b?.name ?? m.id} — ${b?.description ?? ''}`)
+    ui().toast(`Badge: ${b?.name ?? m.id}`, 'badge')
     playSfx('badge')
   })
   r.onMessage(S2C.eggResult, (m: EggResultMsg) => ui().pushEgg(m))
@@ -164,13 +170,12 @@ function bindRoom(r: Room): void {
     useUI.getState().set({ stageClear: m })
     playSfx('win')
     confetti(localPlayer.pos.x, 2, localPlayer.pos.z, 48)
+    const at = playerScreenPoint()
+    flyTrophies(at.x, at.y)
   })
   r.onMessage(S2C.leaderboards, (m: LeaderboardsMsg) => useGame.getState().set({ leaderboards: m }))
-  r.onMessage(S2C.luckyWinner, (m: LuckyWinnerMsg) => {
-    const what = m.vip ? 'the VIP Boomerang' : m.rarity ? `a ${RARITY[m.rarity].name} ${m.petName}` : 'some gems'
-    ui().toast(`${m.name} found the Lucky Block!`, 'success', `They got ${what}.`)
-    playSfx('lucky')
-  })
+  // Someone found the Lucky Block: just the sound (no notification panel).
+  r.onMessage(S2C.luckyWinner, () => playSfx('lucky'))
   r.onMessage(S2C.offline, (m: OfflineMsg) => useUI.getState().set({ offline: m }))
   r.onMessage(S2C.levelUp, (m: { level: number }) => {
     ui().toast(`Level ${m.level}!`, 'success')
@@ -186,7 +191,7 @@ function bindRoom(r: Room): void {
   })
   r.onMessage(S2C.rebirthDone, (m: { rebirths: number }) => {
     playSfx('rebirth')
-    ui().toast(`Rebirth ${m.rebirths}!`, 'success', `Your Power multiplier is now x${m.rebirths + 1}`)
+    ui().toast(`Rebirth ${m.rebirths}! Power x${m.rebirths + 1}`, 'success')
     confetti(localPlayer.pos.x, 2, localPlayer.pos.z, 60)
   })
 
@@ -252,11 +257,6 @@ function bindRoom(r: Room): void {
     useGame.getState().setStatus('error', 'Disconnected from the server. Reconnecting…')
     retryTimer = window.setTimeout(() => void connect(joinName), RETRY_MS)
   })
-}
-
-/** Human label for the stage a player is in, for toasts and the HUD. */
-export function stageLabel(stage: number): string {
-  return stage <= 0 ? 'Lobby' : `Stage ${stage} · ${stageDef(stage).material}`
 }
 
 export { formatNumber, game }

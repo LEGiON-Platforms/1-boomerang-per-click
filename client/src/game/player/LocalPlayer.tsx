@@ -1,26 +1,38 @@
 import { useFrame } from '@react-three/fiber'
 import {
   ANIM,
-  bestBoomerangId,
   constrainPosition,
   GRAVITY,
+  groundHeight,
   JUMP_VELOCITY,
   MOVE_SPEED,
   SPRINT_MULT,
+  STEP_UP,
 } from '@game/shared'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { type Bone, type Group, Mesh, MeshStandardMaterial, Vector3 } from 'three'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type Bone, type Group, MeshLambertMaterial, Vector3 } from 'three'
 
 import { type AvatarRig, PlayerAvatar } from '../../bloxity/session'
-import { game, useGame } from '../../state/gameStore'
-import { getBoomerangGeometry } from '../assets'
-import { boomerangLook } from '../fx/projectiles'
-import { autopilot, cameraState, input, localPlayer, now, pending } from '../runtime'
+import { game } from '../../state/gameStore'
+import { PropBuilder } from '../builder'
+import {
+  autopilot,
+  cameraState,
+  devPose,
+  heldBoomerang,
+  input,
+  localPlayer,
+  now,
+  pending,
+  THROW_ANIM_S,
+  throwFlatness,
+} from '../runtime'
 
 export const PLAYER_HEIGHT = 2.2
-const THROW_ANIM_S = 0.38
 
 const _move = new Vector3()
+/** The hand, in the forearm bone's frame (the rig has no hand bone): set from the rig. */
+const handLocal = new Vector3()
 
 const lerpAngle = (a: number, b: number, t: number) => {
   let d = b - a
@@ -39,35 +51,32 @@ const lerpAngle = (a: number, b: number, t: number) => {
 export function LocalPlayer({ onAvatarReady }: { onAvatarReady?: () => void }) {
   const rootRef = useRef<Group>(null)
   const visualRef = useRef<Group>(null)
-  const motionRef = useRef({ time: 0, speed: 0, grounded: true, maxSpeed: MOVE_SPEED, throwPhase: -1 })
+  const motionRef = useRef({ time: 0, speed: 0, grounded: true, maxSpeed: MOVE_SPEED, velY: 0, throwPhase: -1 })
   const handRef = useRef<Bone | null>(null)
 
-  const boomerangId = useGame((s) => (s.data ? bestBoomerangId(s.data) : 0))
-  const vip = useGame((s) => s.data?.vipBoomerang ?? false)
-
-  // Held boomerang: one mesh that follows the right-hand bone in world space.
-  const held = useMemo(() => {
-    const m = new Mesh(getBoomerangGeometry(), new MeshStandardMaterial({ roughness: 0.45, metalness: 0.15 }))
-    m.castShadow = true
-    m.scale.setScalar(0.62)
-    return m
-  }, [])
-  useEffect(() => {
-    const look = boomerangLook(boomerangId, vip)
-    const mat = held.material as MeshStandardMaterial
-    mat.color.set(look.color)
-    mat.emissive.set(look.color).multiplyScalar(look.glow * 0.6)
-  }, [boomerangId, vip, held])
+  // The held boomerang is drawn by BoomerangInstances; this only poses it.
   useEffect(
     () => () => {
-      ;(held.material as MeshStandardMaterial).dispose()
+      heldBoomerang.visible = false
     },
-    [held],
+    [],
   )
 
   const onRig = useCallback((rig: AvatarRig) => {
-    handRef.current = rig.bones.ArmR2?.bone ?? null
+    const forearm = rig.bones.ArmR2
+    handRef.current = forearm?.bone ?? null
+    if (forearm?.axisX && forearm.axisZ) {
+      // Character "down" (X × Z) in the forearm's frame, one upper-arm length long:
+      // the hand at the end of the forearm in the rest pose.
+      handLocal.crossVectors(forearm.axisX, forearm.axisZ).normalize().multiplyScalar(forearm.bone.position.length())
+    }
   }, [])
+
+  const [avatarShown, setAvatarShown] = useState(false)
+  const handleAvatarReady = useCallback(() => {
+    setAvatarShown(true)
+    onAvatarReady?.()
+  }, [onAvatarReady])
 
   useFrame((state, delta) => {
     const dt = Math.min(delta, 0.05)
@@ -111,27 +120,43 @@ export function LocalPlayer({ onAvatarReady }: { onAvatarReady?: () => void }) {
     }
 
     const sprint = autoSprint || input.sprint || Math.hypot(input.joyX, input.joyY) > 0.92
-    const speed = MOVE_SPEED * (sprint ? SPRINT_MULT : 1) * mag
+    const speed = MOVE_SPEED * (sprint ? SPRINT_MULT : 1) * mag * lp.speedMult
     const run = game().run
     const c = constrainPosition(lp.pos.x + _move.x * speed * dt, lp.pos.z + _move.z * speed * dt, run)
-    const moved = Math.hypot(c.x - lp.pos.x, c.z - lp.pos.z)
-    lp.pos.x = c.x
-    lp.pos.z = c.z
+    let nx = c.x
+    let nz = c.z
+    // Raised floors (the Boomerang Stage): a ledge taller than STEP_UP blocks; slide
+    // along whichever axis is still walkable.
+    if (groundHeight(nx, nz) - lp.pos.y > STEP_UP) {
+      if (groundHeight(nx, lp.pos.z) - lp.pos.y <= STEP_UP) nz = lp.pos.z
+      else if (groundHeight(lp.pos.x, nz) - lp.pos.y <= STEP_UP) nx = lp.pos.x
+      else {
+        nx = lp.pos.x
+        nz = lp.pos.z
+      }
+    }
+    const moved = Math.hypot(nx - lp.pos.x, nz - lp.pos.z)
+    lp.pos.x = nx
+    lp.pos.z = nz
     lp.speed = dt > 0 ? moved / dt : 0
 
-    // --- Jump / gravity -----------------------------------------------------
+    // --- Jump / gravity / stairs -----------------------------------------------
+    const ground = groundHeight(lp.pos.x, lp.pos.z)
     if (input.jump && lp.grounded) {
       lp.velY = JUMP_VELOCITY
       lp.grounded = false
     }
-    if (!lp.grounded || lp.pos.y > 0) {
+    if (lp.grounded && lp.pos.y > ground + 0.05) lp.grounded = false // walked off a step
+    if (!lp.grounded) {
       lp.velY -= GRAVITY * dt
       lp.pos.y += lp.velY * dt
-      if (lp.pos.y <= 0) {
-        lp.pos.y = 0
+      if (lp.pos.y <= ground) {
+        lp.pos.y = ground
         lp.velY = 0
         lp.grounded = true
       }
+    } else if (lp.pos.y < ground) {
+      lp.pos.y = ground // stepped up
     }
 
     // --- Facing: movement direction, or the throw target while aiming --------
@@ -149,18 +174,23 @@ export function LocalPlayer({ onAvatarReady }: { onAvatarReady?: () => void }) {
     motion.time += dt
     motion.speed = lp.speed
     motion.grounded = lp.grounded
+    // The base sprint: level speed bonuses go past it and quicken the stride.
     motion.maxSpeed = MOVE_SPEED * SPRINT_MULT
+    motion.velY = lp.velY
     const since = t - lp.throwAt
     motion.throwPhase = since < THROW_ANIM_S ? since / THROW_ANIM_S : -1
+    if (import.meta.env.DEV && devPose.throwPhase !== null) motion.throwPhase = devPose.throwPhase
 
+    const held = heldBoomerang
     const hand = handRef.current
     if (hand) {
-      hand.getWorldPosition(held.position)
-      held.rotation.set(Math.PI / 2 - 0.4, lp.rotY + Math.PI / 2, 0)
-      held.rotateZ(motion.throwPhase >= 0 ? motion.throwPhase * Math.PI * 4 : 0)
+      hand.updateWorldMatrix(true, false)
+      held.position.copy(handLocal).applyMatrix4(hand.matrixWorld)
     } else {
-      held.position.set(lp.pos.x, lp.pos.y + 1.2, lp.pos.z)
+      held.position.set(lp.pos.x - Math.cos(lp.rotY) * 0.6, lp.pos.y + 1.4, lp.pos.z + Math.sin(lp.rotY) * 0.6)
     }
+    held.yaw = lp.rotY
+    held.flat = throwFlatness(motion.throwPhase)
     held.visible = state.camera.position.distanceToSquared(lp.pos) > 1
   })
 
@@ -168,12 +198,40 @@ export function LocalPlayer({ onAvatarReady }: { onAvatarReady?: () => void }) {
     <>
       <group ref={rootRef}>
         <group ref={visualRef}>
-          <PlayerAvatar onReady={onAvatarReady} onRig={onRig} targetHeight={PLAYER_HEIGHT} motionRef={motionRef} />
+          {!avatarShown && <StandInBody />}
+          {/* Only the avatar suspends on its download — the controller above keeps running. */}
+          <Suspense fallback={null}>
+            <group visible={avatarShown}>
+              <PlayerAvatar onReady={handleAvatarReady} onRig={onRig} targetHeight={PLAYER_HEIGHT} motionRef={motionRef} />
+            </group>
+          </Suspense>
         </group>
       </group>
-      <primitive object={held} />
     </>
   )
+}
+
+/** A blocky body (one draw call) shown while the Bloxity avatar downloads. */
+function StandInBody() {
+  const geometry = useMemo(() => {
+    const b = new PropBuilder()
+    b.block(0, 1.55, 0, 0.62, 0.62, 0.62, '#ffd9a8') // head
+    b.block(0, 0.8, 0, 0.84, 0.76, 0.42, '#2f8cff') // torso
+    b.block(-0.58, 0.82, 0, 0.3, 0.74, 0.34, '#ffd9a8') // arms
+    b.block(0.58, 0.82, 0, 0.3, 0.74, 0.34, '#ffd9a8')
+    b.block(-0.21, 0, 0, 0.38, 0.8, 0.38, '#2b3a67') // legs
+    b.block(0.21, 0, 0, 0.38, 0.8, 0.38, '#2b3a67')
+    return b.build()
+  }, [])
+  const material = useMemo(() => new MeshLambertMaterial({ vertexColors: true }), [])
+  useEffect(
+    () => () => {
+      geometry.dispose()
+      material.dispose()
+    },
+    [geometry, material],
+  )
+  return <mesh geometry={geometry} material={material} castShadow scale={PLAYER_HEIGHT / 1.9} />
 }
 
 export default LocalPlayer

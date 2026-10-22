@@ -34,7 +34,7 @@ export function StagesPanel() {
         <div className="body-text text-[17px]">
           Highest unlocked: <b>Stage {unlocked}</b> · resets on Rebirth
         </div>
-        <button type="button" className="btn3d buy-btn bg-orange" onClick={() => go(0)} disabled={here === 0}>
+        <button type="button" data-stage={0} className="btn3d buy-btn bg-orange" onClick={() => go(0)} disabled={here === 0}>
           <span className="txt-outline">Lobby</span>
         </button>
       </div>
@@ -46,6 +46,7 @@ export function StagesPanel() {
             <button
               key={s.stage}
               type="button"
+              data-stage={s.stage}
               disabled={locked}
               onClick={() => go(s.stage)}
               className="btn3d relative flex flex-col items-center gap-1 px-2 py-3"

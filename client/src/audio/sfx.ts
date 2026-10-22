@@ -32,12 +32,24 @@ export function audioUnlocked(): boolean {
   return ctx !== null
 }
 
-/** Call from a user gesture. Safe to call repeatedly. */
+let resuming = false
+
+/**
+ * Call from a user gesture. Safe (and cheap) to call on every tap: it resumes at
+ * most once at a time, and creates nothing while both sound and music are off.
+ */
 export function unlockAudio(): void {
   if (ctx) {
-    if (ctx.state === 'suspended') void ctx.resume()
+    if (ctx.state === 'suspended' && !resuming) {
+      resuming = true
+      void ctx.resume().finally(() => {
+        resuming = false
+      })
+    }
     return
   }
+  const { sfx, music } = useQuality.getState()
+  if (!sfx && !music) return
   const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
   if (!AC) return
   ctx = new AC()

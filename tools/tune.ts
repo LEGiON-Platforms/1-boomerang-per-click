@@ -1,42 +1,49 @@
 /**
- * Balance tuner: searches the three knobs the design allows us to turn —
- * wall HP growth, rebirth cost base and boomerang costs — to hit the
+ * Balance tuner: searches the knobs the design allows us to turn — wall HP
+ * growth, the XP curve (rebirths are gated by level) and boomerang costs — to hit the
  * progression time targets. Prints the best values to paste into /shared/config.
  *
- *   npx tsx tune.ts [--evals 400] [--seed 1]
+ *   npx tsx tune.ts [--evals 400] [--seed 1] [--keep-costs]
+ *
+ * --keep-costs leaves the boomerang prices in /shared/config as they are (a fixed
+ * design table) and tunes only wall HP growth and the XP curve.
  */
 
-import { BOOMERANGS, REBIRTH, WALL_HP } from '@game/shared'
+import { BOOMERANGS, LEVEL, WALL_HP } from '@game/shared'
 
 import { runSimulation } from './sim-core'
 
 const args = process.argv.slice(2)
+const keepCosts = args.includes('--keep-costs')
 const arg = (name: string, fallback: number) => {
   const i = args.indexOf(`--${name}`)
   return i >= 0 ? Number(args[i + 1]) : fallback
 }
 
-/** The spec's boomerang price table, used as the shape the tuner scales. */
-const BASE_COSTS = BOOMERANGS.map((b) => b.cost)
-
 interface Params {
   earlyGrowth: number
   lateGrowth: number
   taper: number
-  rebirthBase: number
-  /** Overall boomerang price multiplier. */
-  costScale: number
-  /** Extra per-tier price growth (1 = keep the table's shape). */
-  costTilt: number
+  /** XP curve (see LEVEL): base, then growth tapering early → late. */
+  levelBase: number
+  levelEarly: number
+  levelLate: number
+  levelTaper: number
+  /** Boomerang prices: cost(i) = exp(costB1·(i−1) + costB2·(i−1)²), so the first costs exactly 1 Win. */
+  costB1: number
+  costB2: number
 }
 
 const BOUNDS: Record<keyof Params, [number, number]> = {
-  earlyGrowth: [1.5, 14],
+  earlyGrowth: [1.5, 40],
   lateGrowth: [1.2, 3],
   taper: [0.5, 20],
-  rebirthBase: [20, 1e6],
-  costScale: [0.05, 1000],
-  costTilt: [0.85, 1.25],
+  levelBase: [1, 1e4],
+  levelEarly: [1.2, 3],
+  levelLate: [1.03, 2],
+  levelTaper: [1, 200],
+  costB1: [0.05, 1.2],
+  costB2: [-0.01, 0.02],
 }
 
 /** Two significant figures: 1234 → 1200, 56789 → 57000. */
@@ -47,14 +54,24 @@ export function niceRound(v: number): number {
 }
 
 export function boomerangCosts(p: Params): number[] {
-  return BASE_COSTS.map((c, i) => (i === 0 ? 0 : niceRound(c * p.costScale * Math.pow(p.costTilt, i - 1))))
+  const out = [0]
+  for (let i = 1; i < BOOMERANGS.length; i += 1) {
+    let c = niceRound(Math.exp(p.costB1 * (i - 1) + p.costB2 * (i - 1) * (i - 1)))
+    if (c <= out[i - 1]) c = out[i - 1] + 1
+    out.push(c)
+  }
+  return out
 }
 
 function apply(p: Params): void {
   WALL_HP.earlyGrowth = p.earlyGrowth
   WALL_HP.lateGrowth = p.lateGrowth
   WALL_HP.taper = p.taper
-  REBIRTH.costBase = niceRound(p.rebirthBase)
+  LEVEL.base = niceRound(p.levelBase)
+  LEVEL.earlyGrowth = Math.round(p.levelEarly * 1000) / 1000
+  LEVEL.lateGrowth = Math.round(p.levelLate * 1000) / 1000
+  LEVEL.taper = Math.round(p.levelTaper * 10) / 10
+  if (keepCosts) return
   const costs = boomerangCosts(p)
   BOOMERANGS.forEach((b, i) => {
     ;(b as { cost: number }).cost = costs[i]
@@ -80,6 +97,8 @@ export function score(p: Params): { score: number; detail: string } {
     s10: miss(s[9], 50 * 60, 70 * 60),
     s20: miss(s[19], 6 * 3600, 8 * 3600),
     s30: miss(s[29], 20 * 3600, 30 * 3600),
+    // Level-gated rebirths should still come regularly (rebirth-locked pads and pet slots).
+    rebirths: miss(r.player.rebirths, 10, 14),
   }
   const total = Object.values(parts).reduce((a, b) => a + b * b, 0)
   const h = (t?: number) => (t === undefined ? '—' : `${(t / 3600).toFixed(2)}h`)
@@ -114,12 +133,15 @@ if (isMain) {
   const gauss = () => Math.sqrt(-2 * Math.log(rand() + 1e-12)) * Math.cos(2 * Math.PI * rand())
 
   let best: Params = {
-    earlyGrowth: 6,
-    lateGrowth: 1.9,
-    taper: 4,
-    rebirthBase: 400,
-    costScale: 3,
-    costTilt: 1,
+    earlyGrowth: 20,
+    lateGrowth: 1.8,
+    taper: 3.1,
+    levelBase: 14,
+    levelEarly: 1.9,
+    levelLate: 1.25,
+    levelTaper: 15,
+    costB1: 0.33,
+    costB2: 0.0015,
   }
   let bestScore = score(best)
   console.log('start', bestScore.score.toFixed(4), bestScore.detail)
@@ -129,8 +151,9 @@ if (isMain) {
   for (let i = 0; i < evals; i += 1) {
     const cand = { ...best }
     for (const k of Object.keys(cand) as (keyof Params)[]) {
-      // Log-space mutation; additive for the tilt, which lives near 1.
-      cand[k] = k === 'costTilt' ? cand[k] + gauss() * step * 0.05 : cand[k] * Math.exp(gauss() * step)
+      if (keepCosts && (k === 'costB1' || k === 'costB2')) continue
+      // Log-space mutation; additive for the quadratic term, which can be near zero.
+      cand[k] = k === 'costB2' ? cand[k] + gauss() * step * 0.002 : cand[k] * Math.exp(gauss() * step)
     }
     const c = clampParams(cand)
     const sc = score(c)
@@ -146,7 +169,7 @@ if (isMain) {
 
   apply(best)
   console.log('\nBest params:', JSON.stringify(best, null, 2))
-  console.log('rebirth costBase:', REBIRTH.costBase)
-  console.log('boomerang costs:', JSON.stringify(boomerangCosts(best)))
+  console.log('level curve:', JSON.stringify(LEVEL))
+  if (!keepCosts) console.log('boomerang costs:', JSON.stringify(boomerangCosts(best)))
   console.log('final', bestScore.score.toFixed(4), bestScore.detail)
 }

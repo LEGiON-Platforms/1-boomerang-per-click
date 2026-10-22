@@ -8,8 +8,11 @@
     <title>+1 Boomerang Per Click</title>
 
     <!-- Bloxity SDK. Exposes itself as window.Legion.SDK.
-         Must load before the Vite entry script below. -->
-    <script src="https://sdk.bloxity.io/v1/legion-sdk.min.js"></script>
+         `defer` stops it blocking the page while still running before the Vite
+         entry module below (deferred scripts run in order); BloxityProvider also
+         waits for window.Legion.SDK, so a slow CDN can't break startup. -->
+    <link rel="preconnect" href="https://static.bloxity.io" crossorigin />
+    <script defer src="https://sdk.bloxity.io/v1/legion-sdk.min.js"></script>
   </head>
   <body>
     <div id="root"></div>

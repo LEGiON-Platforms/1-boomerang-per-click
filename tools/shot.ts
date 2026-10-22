@@ -23,7 +23,8 @@ const mobile = args.includes('--mobile')
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 async function shot(page: Page, name: string) {
-  const file = path.join(out, `${name}.png`)
+  // Phone runs get an m- prefix so they never overwrite the desktop shots.
+  const file = path.join(out, `${mobile && !name.startsWith('m-') ? 'm-' : ''}${name}.png`)
   await page.screenshot({ path: file })
   console.log('saved', file)
 }
@@ -61,6 +62,12 @@ page.on('console', (m) => {
 })
 page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`))
 
+/** Opens a menu window directly (dev hook), e.g. a Shop tab with no HUD button of its own. */
+const openPanel = (p: string) =>
+  page.evaluate((panel) => {
+    ;(window as unknown as { __bpcUI: { getState(): { openPanel(p: string): void } } }).__bpcUI.getState().openPanel(panel)
+  }, p)
+
 await page.goto(url, { waitUntil: 'domcontentloaded' })
 const nameInput = page.locator('input').first()
 await nameInput.waitFor({ timeout: 20000 })
@@ -72,10 +79,10 @@ await shot(page, `${mobile ? 'm-' : ''}01-lobby`)
 
 if (stepsArg === 'train' || stepsArg === 'all') {
   // Quick-train button 1 teleports to the free pad, then throw a few times.
-  await page.locator('.quick-train').first().click()
+  await page.locator('.train-tile').first().click()
   await sleep(800)
   await clicks(page, 14)
-  await sleep(300)
+  await sleep(120)
   await shot(page, '02-training')
 }
 
@@ -94,17 +101,30 @@ if (stepsArg === 'stage' || stepsArg === 'all') {
 }
 
 if (stepsArg === 'clear' || stepsArg === 'all') {
-  // Keep throwing and walking until the tutorial says the walls are down.
-  for (let i = 0; i < 40; i += 1) {
-    if (await page.getByText('Collect your Wins!').isVisible().catch(() => false)) break
+  type G = { getState(): { run: { wallsBroken: number; stage: number } } }
+  type Rt = { localPlayer: { pos: { x: number; z: number } } }
+  const run = () => page.evaluate(() => (window as unknown as { __bpcGame: G }).__bpcGame.getState().run)
+  const pos = () => page.evaluate(() => ({ ...(window as unknown as { __bpcRuntime: Rt }).__bpcRuntime.localPlayer.pos }))
+  // Keep throwing and walking forward until every wall is down.
+  for (let i = 0; i < 60 && (await run()).wallsBroken < 10; i += 1) {
     await clicks(page, 3, 110)
     await hold(page, 'w', 350)
   }
+  const stage = (await run()).stage
+  const padZ = -(stage - 1) * 80 - 4 - 75
+  // Into the reward room, then look at it.
   await page.keyboard.down('Shift')
-  await hold(page, 'w', 9000)
+  for (let i = 0; i < 40 && (await pos()).z > padZ + 7; i += 1) await hold(page, 'w', 250)
   await page.keyboard.up('Shift')
-  await sleep(1200)
+  await sleep(500)
+  await shot(page, '05-reward-room')
+  // Onto the pad (left side, by the end wall).
+  for (let i = 0; i < 40 && (await pos()).z > padZ + 1; i += 1) await hold(page, 'w', 150)
+  for (let i = 0; i < 40 && (await pos()).x > -9; i += 1) await hold(page, 'a', 150)
+  await sleep(450)
   await shot(page, '05-stage-clear')
+  await sleep(2600)
+  await shot(page, '05-respawn')
 }
 
 if (stepsArg === 'panels' || stepsArg === 'all') {
@@ -113,12 +133,23 @@ if (stepsArg === 'panels' || stepsArg === 'all') {
   if (await page.getByText('Farm Again ↻').isVisible().catch(() => false)) await page.getByText('Farm Again ↻').click()
   await sleep(400)
   for (const [label, file] of [
-    ['Trails', '06-trails'],
     ['Shop', '07-shop'],
     ['Rebirth', '08-rebirth'],
     ['Stages', '09-stages'],
   ] as const) {
     await page.locator('button', { hasText: label }).first().click()
+    await sleep(700)
+    await shot(page, file)
+    await page.keyboard.press('Escape')
+    await sleep(300)
+  }
+  // The other Shop tabs and Settings.
+  for (const [panel, file] of [
+    ['trails', '06-trails'],
+    ['boosts', '24-boosts'],
+    ['settings', '25-settings'],
+  ] as const) {
+    await openPanel(panel)
     await sleep(700)
     await shot(page, file)
     await page.keyboard.press('Escape')
@@ -143,7 +174,7 @@ if (stepsArg === 'pets' || stepsArg === 'all') {
   await hold(page, 'd', 500)
   await sleep(600)
   await shot(page, '11-pet-follow')
-  await page.locator('button', { hasText: 'Items' }).first().click()
+  await openPanel('items')
   await sleep(700)
   await shot(page, '12-items')
   await page.keyboard.press('Escape')
@@ -151,10 +182,6 @@ if (stepsArg === 'pets' || stepsArg === 'all') {
 
 if (stepsArg === 'retention' || stepsArg === 'all') {
   await page.keyboard.press('Escape')
-  const openPanel = (p: string) =>
-    page.evaluate((panel) => {
-      ;(window as unknown as { __bpcUI: { getState(): { openPanel(p: string): void } } }).__bpcUI.getState().openPanel(panel)
-    }, p)
   for (const [panel, file] of [
     ['daily', '13-daily'],
     ['gifts', '14-gifts'],
@@ -172,6 +199,142 @@ if (stepsArg === 'retention' || stepsArg === 'all') {
   })
   await sleep(4200)
   await shot(page, '17-tutorial-roll')
+}
+
+if (stepsArg === 'display') {
+  // The Boomerang Stage seen from the lobby, then up close from its front tier.
+  type Rt = { cameraState: { yaw: number; pitch: number; distance: number } }
+  const camera = (yaw: number, pitch: number, distance: number) =>
+    page.evaluate(
+      ([y, p, d]) => {
+        const c = (window as unknown as { __bpcRuntime: Rt }).__bpcRuntime.cameraState
+        c.yaw = y
+        c.pitch = p
+        c.distance = d
+      },
+      [yaw, pitch, distance],
+    )
+  await page.keyboard.press('Escape')
+  await page.keyboard.down('Shift')
+  await hold(page, 'd', 1500)
+  await page.keyboard.up('Shift')
+  await camera(-Math.PI / 2 + 0.15, 0.2, 20)
+  await sleep(900)
+  await shot(page, '26-display')
+  await camera(-Math.PI / 2, 0.15, 9)
+  await page.keyboard.down('Shift')
+  await hold(page, 'w', 1300)
+  await page.keyboard.up('Shift')
+  await sleep(700)
+  await shot(page, '27-display-close')
+}
+
+if (stepsArg === 'prompt') {
+  // Walk up to an egg so the "E" interact prompt shows.
+  await page.keyboard.press('Escape')
+  // Line up with the egg at x = 5, then walk south until its block stops us.
+  await page.keyboard.down('Shift')
+  await hold(page, 'd', 520)
+  await hold(page, 's', 3600)
+  await page.keyboard.up('Shift')
+  await sleep(500)
+  await shot(page, '34-prompt')
+}
+
+if (stepsArg === 'pose') {
+  // The character from the front and the side: standing, frozen throw phases, a jump.
+  type Rt = {
+    cameraState: { yaw: number; pitch: number; distance: number }
+    localPlayer: { rotY: number }
+    devPose: { throwPhase: number | null }
+  }
+  const set = (yawOffset: number, phase: number | null) =>
+    page.evaluate(
+      ([off, ph]) => {
+        const rt = (window as unknown as { __bpcRuntime: Rt }).__bpcRuntime
+        rt.cameraState.yaw = rt.localPlayer.rotY + (off as number)
+        rt.cameraState.pitch = 0.1
+        rt.cameraState.distance = 6
+        rt.devPose.throwPhase = ph as number | null
+      },
+      [yawOffset, phase],
+    )
+  await page.keyboard.press('Escape')
+  for (const [view, off] of [['front', 0], ['side', Math.PI / 2], ['back', Math.PI]] as const) {
+    for (const phase of [null, 0.1, 0.2, 0.32, 0.45, 0.7]) {
+      await set(off, phase)
+      await sleep(350)
+      await shot(page, `32-pose-${view}-${phase === null ? 'idle' : phase}`)
+    }
+  }
+  await set(Math.PI / 2, null)
+  await page.keyboard.press('Space')
+  await sleep(180)
+  await shot(page, '33-jump-up')
+  await sleep(330)
+  await shot(page, '33-jump-fall')
+}
+
+if (stepsArg === 'hold') {
+  // Close-ups of the hold pose and a throw (wind-up / release timings are approximate).
+  await page.keyboard.press('Escape')
+  await page.evaluate(() => {
+    const c = (window as unknown as { __bpcRuntime: { cameraState: { yaw: number; pitch: number; distance: number } } }).__bpcRuntime
+      .cameraState
+    c.yaw = 0.75
+    c.pitch = 0.12
+    c.distance = 5
+  })
+  await sleep(800)
+  await shot(page, '28-hold')
+  await page.mouse.click(800, 300)
+  await sleep(70)
+  await shot(page, '29-windup')
+  await sleep(1200)
+  await page.mouse.click(800, 300)
+  await sleep(150)
+  await shot(page, '30-release')
+  await sleep(1200)
+  await clicks(page, 6, 90)
+  await shot(page, '31-flight')
+}
+
+if (stepsArg === 'boomerangs') {
+  // Walk to the boomerang pedestals, face them, and cycle the display through the tiers
+  // (owned count is overridden locally — display only, the server keeps the truth).
+  await page.keyboard.press('Escape')
+  await page.keyboard.down('Shift')
+  await hold(page, 'd', 1500)
+  await page.keyboard.up('Shift')
+  await page.evaluate(() => {
+    const rt = (window as unknown as { __bpcRuntime: { cameraState: { yaw: number; pitch: number; distance: number } } })
+      .__bpcRuntime
+    rt.cameraState.yaw = -Math.PI / 2 + 0.25
+    rt.cameraState.pitch = 0.12
+    rt.cameraState.distance = 7
+  })
+  const setOwned = (owned: number) =>
+    page.evaluate((n) => {
+      const g = (window as unknown as { __bpcGame: { getState(): { data: object; set(p: object): void } } }).__bpcGame
+      g.getState().set({ data: { ...g.getState().data, boomerangsOwned: n } })
+    }, owned)
+  for (const owned of [1, 8, 15, 22, 25]) {
+    await setOwned(owned)
+    await sleep(900)
+    await shot(page, `20-pedestals-${owned}`)
+  }
+  await clicks(page, 4, 90)
+  await sleep(120)
+  await shot(page, '21-throw')
+  await page.locator('button', { hasText: 'Shop' }).first().click()
+  await sleep(800)
+  await shot(page, '22-shop-high')
+  await setOwned(8)
+  await page.keyboard.press('Escape')
+  await sleep(300)
+  await page.locator('button', { hasText: 'Shop' }).first().click()
+  await sleep(800)
+  await shot(page, '23-shop-low')
 }
 
 const info = await page.evaluate(() => window.__bpcRenderInfo?.() ?? null)

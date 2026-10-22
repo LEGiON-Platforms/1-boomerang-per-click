@@ -1,20 +1,20 @@
 import { useFrame } from '@react-three/fiber'
 import {
-  BOOMERANG_STEPS,
+  BOOMERANG_SPOTS,
+  BOOMERANG_STAGE,
   EGG_SPOTS,
   EGGS,
   INVITE_BOARD,
   LEADERBOARD_SPOTS,
   LIKE_BOARD,
   LOBBY,
-  PEDESTAL_SPOTS,
   REBIRTH_STATUE,
   SPAWN,
-  STAGES_PORTAL,
   TRAILS_STALL,
   TRAINING_DECK,
   TRAINING_PAD_SPOTS,
   TRAINING_PADS,
+  VIP_DISPLAY,
 } from '@game/shared'
 import { useEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, type Group, MeshBasicMaterial, MeshLambertMaterial, type Texture } from 'three'
@@ -28,6 +28,8 @@ import { Dummies } from './Dummies'
 import { EggBlocks } from './EggBlocks'
 import { Leaderboards } from './Leaderboards'
 import { LobbySigns } from './LobbySigns'
+import { buildPaving } from './paving'
+import { NextBoomerangGlow } from './NextBoomerangGlow'
 
 /** Cliff tiers around the lobby's west, east and south: [inner offset, outer offset, height]. */
 const TIERS: [number, number, number][] = [
@@ -80,12 +82,9 @@ function mergeWorldBoxes(boxes: [number, number, number, number, number][], tile
 function buildProps(): BufferGeometry {
   const b = new PropBuilder()
 
-  // Spawn plaza disc and the paths leading off it.
-  b.cylinder(SPAWN.x, 0, SPAWN.z, 7.5, 0.06, '#b9bcc8', 28)
-  b.cylinder(SPAWN.x, 0, SPAWN.z, 5.5, 0.08, '#a6a9b6', 28)
-
   // Corridor gate arch.
-  b.block(-9, 0, 0, 2, 12, 2, '#e9e9ef').block(9, 0, 0, 2, 12, 2, '#e9e9ef')
+  // Pillars stand 0.1 proud of the cliff faces at x = ±8 (flush faces z-fight).
+  b.block(-9, 0, 0, 2.2, 12, 2.2, '#e9e9ef').block(9, 0, 0, 2.2, 12, 2.2, '#e9e9ef')
   b.block(0, 12, 0, 20, 1.6, 2, '#ff5c8a')
 
   // Training deck with plank stripes, and the dummies' sign posts.
@@ -95,21 +94,26 @@ function buildProps(): BufferGeometry {
   const deckCz = (TRAINING_DECK.minZ + TRAINING_DECK.maxZ) / 2
   b.block(deckCx, 0, deckCz, deckW, 1.2, deckD, '#8a5530')
   for (let z = TRAINING_DECK.minZ + 1; z < TRAINING_DECK.maxZ; z += 2) {
-    b.block(deckCx, 1.2, z, deckW, 0.06, 0.12, '#6e4224')
+    b.block(deckCx, 1.2, z, deckW - 0.04, 0.06, 0.12, '#6e4224')
   }
-  b.block(TRAINING_DECK.maxX - 0.3, 0, deckCz, 0.6, 1.5, deckD, '#6e4224')
+  b.block(TRAINING_DECK.maxX - 0.28, 0, deckCz, 0.6, 1.5, deckD + 0.04, '#6e4224') // rail, just proud of the deck face
 
-  // Boomerang display steps (east) and pedestals.
-  const stepsCz = (BOOMERANG_STEPS.minZ + BOOMERANG_STEPS.maxZ) / 2
-  const stepsD = BOOMERANG_STEPS.maxZ - BOOMERANG_STEPS.minZ
-  for (let i = 0; i < 4; i += 1) {
-    const x0 = BOOMERANG_STEPS.minX + i * 2.5
-    b.block((x0 + LOBBY.maxX) / 2, 0, stepsCz, LOBBY.maxX - x0, 1 + i * 1.2, stepsD, i % 2 ? '#b0462c' : '#c4553b')
+  // Boomerang Stage (east): two tiers with a light trim along their front edges,
+  // a red buy pad under every display and a gold podium for the VIP boomerang.
+  const S = BOOMERANG_STAGE
+  const depth = S.maxZ - S.minZ
+  const cz = (S.minZ + S.maxZ) / 2
+  b.block((S.minX + S.backX) / 2, 0, cz, S.backX - S.minX, S.frontHeight, depth, '#c4553b')
+  b.block((S.backX + S.maxX) / 2, 0, cz, S.maxX - S.backX, S.backHeight, depth, '#b0462c')
+  // Trims stand a little proud of the faces they sit on, so they never z-fight.
+  b.block(S.minX + 0.1, S.frontHeight - 0.12, cz, 0.3, 0.15, depth + 0.04, '#f0b08f')
+  b.block(S.backX + 0.1, S.backHeight - 0.12, cz, 0.3, 0.15, depth + 0.04, '#f0b08f')
+  for (const p of BOOMERANG_SPOTS) {
+    b.cylinder(p.x, p.y, p.z, S.padRadius, 0.1, '#5a1418', 20)
+    b.cylinder(p.x, p.y + 0.1, p.z, S.padRadius - 0.22, 0.06, '#ff2f45', 20)
   }
-  for (const p of PEDESTAL_SPOTS) {
-    b.cylinder(p.x, 0, p.z, 1.1, 0.5, '#7a1f1f', 18)
-    b.cylinder(p.x, 0.5, p.z, 0.95, 0.5, '#e8323c', 18)
-  }
+  b.cylinder(VIP_DISPLAY.x, VIP_DISPLAY.y, VIP_DISPLAY.z, 1.8, 0.35, '#8a5a00', 20)
+  b.cylinder(VIP_DISPLAY.x, VIP_DISPLAY.y + 0.35, VIP_DISPLAY.z, 1.5, 0.2, '#ffc21a', 20)
 
   // Trails stall: counter, back wall, striped awning, poles.
   const { x: tx, z: tz } = TRAILS_STALL
@@ -121,14 +125,6 @@ function buildProps(): BufferGeometry {
     b.box(tx - 3.15 + i * 0.9, 4.5, tz + 0.2, 0.9, 0.35, 3.4, i % 2 ? '#ffffff' : '#2f8cff')
   }
   b.block(tx + 1.8, 1.45, tz - 0.6, 0.8, 1.6, 0.6, '#d9a066') // a little trainer behind the counter
-
-  // Stages portal: pink/white brick arch.
-  const { x: px, z: pz } = STAGES_PORTAL
-  for (let y = 0; y < 8; y += 1) {
-    const col = y % 2 ? '#ffffff' : '#ff7ab8'
-    b.block(px - 3.6, y, pz, 1.4, 1, 1.4, col).block(px + 3.6, y, pz, 1.4, 1, 1.4, y % 2 ? '#ff7ab8' : '#ffffff')
-  }
-  for (let i = 0; i < 6; i += 1) b.block(px - 3.6 + i * 1.44, 8, pz, 1.44, 1, 1.4, i % 2 ? '#ffffff' : '#ff7ab8')
 
   // Rebirth statue pedestal.
   const { x: rx, z: rz } = REBIRTH_STATUE
@@ -167,10 +163,10 @@ function buildProps(): BufferGeometry {
     [-22, 46],
     [24, 52],
     [-8, 52],
-    [36, 58],
+    [36, 63],
     [-36, 60],
     [10, 30],
-  ].forEach(([x, z], i) => b.pumpkin(x, 0, z, 0.8 + (i % 3) * 0.15))
+  ].forEach(([x, z], i) => b.pumpkin(x, 0, z, 0.8 + (i % 3) * 0.15, Math.atan2(SPAWN.x - x, SPAWN.z - z))) // grinning at spawn
   for (let z = -2; z <= 72; z += 9) {
     b.tree(LOBBY.minX - 10, 12, z, 1.1)
     b.tree(LOBBY.maxX + 10, 12, z + 4, 1.1)
@@ -185,8 +181,6 @@ function buildGlow(): BufferGeometry {
   TRAINING_PAD_SPOTS.forEach((s, i) => {
     b.block(s.pad.x, 0.02, s.pad.z, 4.2, 0.12, 4.2, TRAINING_PADS[i].color)
   })
-  // Portal surface.
-  b.box(STAGES_PORTAL.x, 4, STAGES_PORTAL.z, 5.8, 8, 0.2, '#ff9fd0')
   return b.build()
 }
 
@@ -196,9 +190,10 @@ export function Lobby() {
 
   const textures = useMemo(() => {
     const t = {
-      floor: createStudTexture({ base: '#d7d9e2', alt: '#cdd0da', size: texSize }) as Texture,
-      grass: createStudTexture({ base: '#5cee30', alt: '#52de2b', size: texSize }) as Texture,
-      brick: createStudTexture({ base: '#c8743e', alt: '#b8662f', studsPerCell: 4, size: texSize }) as Texture,
+      // Colours from the original: lavender-grey paving, lego-green grass, terracotta cliffs.
+      floor: createStudTexture({ base: '#dcdce8', alt: '#d1d1df', size: texSize }) as Texture,
+      grass: createStudTexture({ base: '#4ee628', alt: '#45d923', size: texSize }) as Texture,
+      brick: createStudTexture({ base: '#c8643c', alt: '#b85a36', studsPerCell: 4, size: texSize }) as Texture,
     }
     return t
   }, [texSize])
@@ -216,6 +211,7 @@ export function Lobby() {
     return {
       floor,
       field,
+      paving: buildPaving(),
       cliffs: mergeWorldBoxes(boxes, BRICK_TILE, false),
       cliffTops: mergeWorldBoxes(boxes, STUD_TILE, true),
       props: buildProps(),
@@ -225,7 +221,7 @@ export function Lobby() {
 
   const materials = useMemo(
     () => ({
-      floor: new MeshLambertMaterial({ map: textures.floor }),
+      paving: new MeshLambertMaterial({ map: textures.floor, vertexColors: true }),
       grass: new MeshLambertMaterial({ map: textures.grass }),
       brick: new MeshLambertMaterial({ map: textures.brick }),
       props: new MeshLambertMaterial({ vertexColors: true }),
@@ -257,7 +253,9 @@ export function Lobby() {
   return (
     <group ref={groupRef}>
       <mesh geometry={geometries.field} material={materials.grass} receiveShadow />
-      <mesh geometry={geometries.floor} material={materials.floor} receiveShadow />
+      {/* The lobby ground is grass; paving (plaza, paths) is laid over it. */}
+      <mesh geometry={geometries.floor} material={materials.grass} receiveShadow />
+      <mesh geometry={geometries.paving} material={materials.paving} receiveShadow />
       <mesh geometry={geometries.cliffs} material={materials.brick} receiveShadow />
       <mesh geometry={geometries.cliffTops} material={materials.grass} />
       <mesh geometry={geometries.props} material={materials.props} castShadow receiveShadow />
@@ -265,6 +263,7 @@ export function Lobby() {
       <Dummies />
       <EggBlocks />
       <LobbySigns />
+      <NextBoomerangGlow />
       <Leaderboards />
     </group>
   )

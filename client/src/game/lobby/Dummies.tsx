@@ -10,6 +10,9 @@ import { now } from '../runtime'
 
 const DECK_TOP = 1.2
 
+/** Where a throw strikes a dummy: the centre of the target on its chest (dummy x + this, y). */
+export const DUMMY_STRIKE = { dx: 0.5, y: DECK_TOP + 1.95 }
+
 /** One target dummy facing +X (towards the pads), as a single geometry. */
 function buildDummyGeometry(): BufferGeometry {
   const body = new PropBuilder()

@@ -59,7 +59,6 @@ export const C2S = {
   deletePet: 'deletePet',
   rebirth: 'rebirth',
   claimPad: 'claimPad',
-  stageChoice: 'stageChoice',
   claimGift: 'claimGift',
   claimDaily: 'claimDaily',
   claimQuest: 'claimQuest',
@@ -97,10 +96,6 @@ export interface ThrowMsg {
 export interface OpenEggMsg {
   egg: EggId
   count: 1 | 3
-}
-
-export interface StageChoiceMsg {
-  choice: 'next' | 'farm'
 }
 
 /* ---------------------------------------------------------------------------
