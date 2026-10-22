@@ -25,6 +25,7 @@ import { PropBuilder } from '../builder'
 import { localPlayer } from '../runtime'
 import { createStudTexture, createWorldBoxGeometry, createWorldPlaneGeometry } from '../textures'
 import { Dummies } from './Dummies'
+import { GateArrows } from './GateArrows'
 import { Leaderboards } from './Leaderboards'
 import { LobbySigns } from './LobbySigns'
 import { buildPaving } from './paving'
@@ -253,6 +254,7 @@ export function Lobby() {
       <mesh geometry={geometries.cliffTops} material={materials.grass} />
       <mesh geometry={geometries.props} material={materials.props} castShadow receiveShadow />
       <mesh geometry={geometries.glow} material={materials.glow} />
+      <GateArrows />
       <Dummies />
       <LobbySigns />
       <NextBoomerangGlow />
